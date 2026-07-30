@@ -1,10 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
-import { testZAction, type TestState } from "./actions";
+import { criarAction, type CriarState } from "./actions";
 
-export function TestZForm() {
-  const [state, formAction, pending] = useActionState(testZAction, {});
+export function CriarForm() {
+  const [state, formAction, pending] = useActionState(criarAction, {});
   return (
     <form action={formAction}>
       <input name="name" className="input" />

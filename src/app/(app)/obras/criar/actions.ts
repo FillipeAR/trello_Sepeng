@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requireActor } from "@/server/actor";
 import { createProject } from "@/modules/projects/commands";
 
-export interface TestState {
+export interface CriarState {
   message?: string;
 }
 
@@ -12,7 +12,7 @@ function parseLocalDate(value: string): Date {
   return new Date(`${value}T00:00:00`);
 }
 
-export async function testZAction(_prev: TestState, formData: FormData): Promise<TestState> {
+export async function criarAction(_prev: CriarState, formData: FormData): Promise<CriarState> {
   const actor = await requireActor();
   const project = await createProject(actor, {
     name: String(formData.get("name") ?? ""),
