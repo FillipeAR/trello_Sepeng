@@ -1,0 +1,686 @@
+// ObraFlow — Gestão Operacional de Obras
+// O fluxo de trabalho é DADO, não código. Ver src/core/workflow/engine.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum WorkflowVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum StageMode {
+  SEQUENTIAL
+  PARALLEL
+}
+
+enum JoinPolicy {
+  ALL
+  ANY
+}
+
+enum FieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  CURRENCY
+  DATE
+  SELECT
+  MULTISELECT
+  USER
+  USER_MULTI
+  CHECKBOX
+  FILE
+}
+
+enum ActionKind {
+  ADVANCE
+  RETURN
+  REJECT
+  FINISH
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum StageInstanceStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+  RETURNED
+}
+
+enum TeamRole {
+  MANAGER
+  FOREMAN
+  MEMBER
+}
+
+enum ProjectUpdateType {
+  PROGRESS
+  INCIDENT
+  NOTE
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum CommentEntityType {
+  PROJECT
+  STAGE_INSTANCE
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy e identidade
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  memberships   Membership[]
+  departments   Department[]
+  roles         Role[]
+  workflows     WorkflowDefinition[]
+  projects      Project[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  outboxEvents  OutboxEvent[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  avatarUrl    String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  memberships     Membership[]
+  createdProjects Project[]                @relation("ProjectCreatedBy")
+  assignments     ProjectTeamAssignment[]
+  completedStages StageInstance[]          @relation("StageCompletedBy")
+  updates         ProjectUpdate[]
+  comments        Comment[]
+  mentions        Mention[]
+  notifications   Notification[]
+  notifPrefs      NotificationPreference[]
+  assignedTasks   Task[]                   @relation("TaskAssignee")
+  createdTasks    Task[]                   @relation("TaskCreatedBy")
+  attachments     Attachment[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  roleId         String
+  departmentId   String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+  department   Department?  @relation(fields: [departmentId], references: [id])
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, departmentId])
+  @@map("memberships")
+}
+
+model Department {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+  stages       WorkflowStage[]
+  tasks        Task[]
+
+  @@unique([organizationId, slug])
+  @@map("departments")
+}
+
+model Role {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  isSystem       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  memberships  Membership[]
+  permissions  RolePermission[]
+
+  @@unique([organizationId, slug])
+  @@map("roles")
+}
+
+/// Catálogo global de permissões — ver src/core/rbac/permissions.ts
+model Permission {
+  id          String @id @default(cuid())
+  key         String @unique
+  category    String
+  description String
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Workflow — a esteira como configuração versionada
+// ---------------------------------------------------------------------------
+
+model WorkflowDefinition {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  versions     WorkflowVersion[]
+
+  @@unique([organizationId, slug])
+  @@map("workflow_definitions")
+}
+
+/// Snapshot imutável do fluxo. Obras em andamento ficam travadas na versão em
+/// que entraram — alterar o fluxo nunca quebra obra viva.
+model WorkflowVersion {
+  id             String                @id @default(cuid())
+  organizationId String
+  definitionId   String
+  version        Int
+  status         WorkflowVersionStatus @default(DRAFT)
+  notes          String?
+  publishedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  definition  WorkflowDefinition        @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  stages      WorkflowStage[]
+  transitions WorkflowTransition[]
+  instances   ProjectWorkflowInstance[]
+
+  @@unique([definitionId, version])
+  @@index([organizationId, status])
+  @@map("workflow_versions")
+}
+
+model WorkflowStage {
+  id             String     @id @default(cuid())
+  organizationId String
+  versionId      String
+  key            String
+  name           String
+  /// Rótulo mostrado ao usuário ao ENTRAR na etapa ("Obra Ganha", "RH Concluído").
+  displayStatus  String
+  description    String?
+  order          Int
+  departmentId   String?
+  slaHours       Int?
+  mode           StageMode  @default(SEQUENTIAL)
+  joinPolicy     JoinPolicy @default(ALL)
+  isInitial      Boolean    @default(false)
+  isFinal        Boolean    @default(false)
+  color          String     @default("#64748b")
+  icon           String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  version    WorkflowVersion           @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  department Department?               @relation(fields: [departmentId], references: [id])
+  fields     StageField[]
+  actions    StageAction[]             @relation("StageActions")
+  targetOf   StageAction[]             @relation("StageActionTarget")
+  outgoing   WorkflowTransition[]      @relation("TransitionFrom")
+  incoming   WorkflowTransition[]      @relation("TransitionTo")
+  instances  StageInstance[]
+  currentOf  ProjectWorkflowInstance[] @relation("CurrentStage")
+
+  @@unique([versionId, key])
+  @@index([versionId, order])
+  @@map("workflow_stages")
+}
+
+/// Campos que a etapa exige. É isto que torna "Diretoria define gerente,
+/// encarregado e equipe" configurável sem tocar em código.
+model StageField {
+  id             String    @id @default(cuid())
+  organizationId String
+  stageId        String
+  key            String
+  label          String
+  type           FieldType
+  required       Boolean   @default(false)
+  order          Int
+  helpText       String?
+  /// Para SELECT/MULTISELECT: [{ value, label }]
+  options        Json?
+  defaultValue   Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  stage  WorkflowStage     @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  values StageFieldValue[]
+
+  @@unique([stageId, key])
+  @@index([stageId, order])
+  @@map("stage_fields")
+}
+
+model StageAction {
+  id                 String     @id @default(cuid())
+  organizationId     String
+  stageId            String
+  key                String
+  label              String
+  kind               ActionKind @default(ADVANCE)
+  targetStageId      String?
+  requiredPermission String?
+  requiresComment    Boolean    @default(false)
+  order              Int        @default(0)
+  variant            String     @default("primary")
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  stage       WorkflowStage        @relation("StageActions", fields: [stageId], references: [id], onDelete: Cascade)
+  targetStage WorkflowStage?       @relation("StageActionTarget", fields: [targetStageId], references: [id])
+  transitions WorkflowTransition[]
+
+  @@unique([stageId, key])
+  @@map("stage_actions")
+}
+
+model WorkflowTransition {
+  id             String   @id @default(cuid())
+  organizationId String
+  versionId      String
+  fromStageId    String
+  toStageId      String
+  actionId       String?
+  /// Expressão declarativa avaliada por src/core/workflow/conditions.ts (sem eval).
+  condition      Json?
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  version   WorkflowVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fromStage WorkflowStage   @relation("TransitionFrom", fields: [fromStageId], references: [id], onDelete: Cascade)
+  toStage   WorkflowStage   @relation("TransitionTo", fields: [toStageId], references: [id], onDelete: Cascade)
+  action    StageAction?    @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId, fromStageId])
+  @@map("workflow_transitions")
+}
+
+// ---------------------------------------------------------------------------
+// Obra
+// ---------------------------------------------------------------------------
+
+model Project {
+  id               String        @id @default(cuid())
+  organizationId   String
+  code             String
+  name             String
+  client           String
+  contractValue    Decimal       @db.Decimal(14, 2)
+  location         String
+  plannedStartDate DateTime
+  plannedEndDate   DateTime
+  actualStartDate  DateTime?
+  actualEndDate    DateTime?
+  scopeSummary     String
+  progressPercent  Int           @default(0)
+  status           ProjectStatus @default(ACTIVE)
+  createdById      String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                     @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  workflow       ProjectWorkflowInstance?
+  stageInstances StageInstance[]
+  team           ProjectTeamAssignment[]
+  updates        ProjectUpdate[]
+  tasks          Task[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@index([organizationId, plannedEndDate])
+  @@map("projects")
+}
+
+model ProjectWorkflowInstance {
+  id                String    @id @default(cuid())
+  organizationId    String
+  projectId         String    @unique
+  workflowVersionId String
+  currentStageId    String?
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  updatedAt         DateTime  @updatedAt
+
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version        WorkflowVersion @relation(fields: [workflowVersionId], references: [id])
+  currentStage   WorkflowStage?  @relation("CurrentStage", fields: [currentStageId], references: [id])
+  stageInstances StageInstance[]
+
+  @@index([organizationId, currentStageId])
+  @@map("project_workflow_instances")
+}
+
+model StageInstance {
+  id                 String              @id @default(cuid())
+  organizationId     String
+  projectId          String
+  workflowInstanceId String
+  stageId            String
+  status             StageInstanceStatus @default(PENDING)
+  enteredAt          DateTime            @default(now())
+  dueAt              DateTime?
+  completedAt        DateTime?
+  completedById      String?
+  slaBreached        Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  project          Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workflowInstance ProjectWorkflowInstance @relation(fields: [workflowInstanceId], references: [id], onDelete: Cascade)
+  stage            WorkflowStage           @relation(fields: [stageId], references: [id])
+  completedBy      User?                   @relation("StageCompletedBy", fields: [completedById], references: [id])
+  fieldValues      StageFieldValue[]
+  tasks            Task[]
+
+  @@index([organizationId, status])
+  @@index([stageId, enteredAt])
+  @@index([projectId, enteredAt])
+  @@map("stage_instances")
+}
+
+model StageFieldValue {
+  id              String   @id @default(cuid())
+  organizationId  String
+  stageInstanceId String
+  fieldId         String
+  value           Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  stageInstance StageInstance @relation(fields: [stageInstanceId], references: [id], onDelete: Cascade)
+  field         StageField    @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([stageInstanceId, fieldId])
+  @@map("stage_field_values")
+}
+
+model ProjectTeamAssignment {
+  id             String   @id @default(cuid())
+  organizationId String
+  projectId      String
+  userId         String
+  role           TeamRole
+  assignedAt     DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId, role])
+  @@index([organizationId, userId])
+  @@map("project_team_assignments")
+}
+
+model ProjectUpdate {
+  id              String            @id @default(cuid())
+  organizationId  String
+  projectId       String
+  authorId        String
+  type            ProjectUpdateType @default(PROGRESS)
+  progressPercent Int?
+  description     String
+  occurredAt      DateTime          @default(now())
+  createdAt       DateTime          @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id])
+
+  @@index([projectId, occurredAt])
+  @@map("project_updates")
+}
+
+model Attachment {
+  id             String    @id @default(cuid())
+  organizationId String
+  entityType     String
+  entityId       String
+  fileName       String
+  url            String
+  mimeType       String
+  size           Int
+  uploadedById   String
+  createdAt      DateTime  @default(now())
+  deletedAt      DateTime?
+
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Colaboração, pendências e notificações
+// ---------------------------------------------------------------------------
+
+model Comment {
+  id             String            @id @default(cuid())
+  organizationId String
+  entityType     CommentEntityType
+  entityId       String
+  parentId       String?
+  authorId       String
+  body           String
+  createdAt      DateTime          @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+
+  author   User      @relation(fields: [authorId], references: [id])
+  parent   Comment?  @relation("CommentThread", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentThread")
+  mentions Mention[]
+
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@map("comments")
+}
+
+model Mention {
+  id             String   @id @default(cuid())
+  organizationId String
+  commentId      String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@index([organizationId, userId])
+  @@map("mentions")
+}
+
+model Task {
+  id              String     @id @default(cuid())
+  organizationId  String
+  projectId       String
+  stageInstanceId String?
+  departmentId    String?
+  title           String
+  description     String?
+  assigneeId      String?
+  dueAt           DateTime?
+  status          TaskStatus @default(OPEN)
+  completedAt     DateTime?
+  createdById     String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stageInstance StageInstance? @relation(fields: [stageInstanceId], references: [id], onDelete: SetNull)
+  department    Department?    @relation(fields: [departmentId], references: [id])
+  assignee      User?          @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy     User           @relation("TaskCreatedBy", fields: [createdById], references: [id])
+
+  @@index([organizationId, status, assigneeId])
+  @@index([organizationId, status, departmentId])
+  @@map("tasks")
+}
+
+model Notification {
+  id             String    @id @default(cuid())
+  organizationId String
+  userId         String
+  type           String
+  title          String
+  body           String?
+  linkUrl        String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id             String              @id @default(cuid())
+  organizationId String
+  userId         String
+  eventType      String
+  channel        NotificationChannel
+  enabled        Boolean             @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType, channel])
+  @@map("notification_preferences")
+}
+
+/// Outbox transacional: efeitos colaterais (notificação, e-mail, WhatsApp) são
+/// gravados junto da transição e processados por um worker separado.
+model OutboxEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  type           String
+  payload        Json
+  status         OutboxStatus @default(PENDING)
+  attempts       Int          @default(0)
+  idempotencyKey String       @unique
+  availableAt    DateTime     @default(now())
+  processedAt    DateTime?
+  error          String?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
+// ---------------------------------------------------------------------------
+// Auditoria — append-only, nada se perde
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  actorId        String?
+  action         String
+  entityType     String
+  entityId       String
+  summary        String?
+  beforeJson     Json?
+  afterJson      Json?
+  diffJson       Json?
+  ip             String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorId], references: [id])
+
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --border: #e2e6ec;
+  --foreground: #101828;
+  --muted: #667085;
+  --primary: #1d4ed8;
+  --primary-foreground: #ffffff;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b0f16;
+    --surface: #131924;
+    --surface-muted: #1a2231;
+    --border: #263143;
+    --foreground: #e6ebf2;
+    --muted: #94a3b8;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-border bg-surface;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-foreground mb-1.5;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm
+           outline-none transition
+           focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+
+  .btn,
+  .btn-primary,
+  .btn-ghost,
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
+           text-sm font-medium transition disabled:opacity-50
+           disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:opacity-90;
+  }
+
+  .btn-ghost {
+    @apply border border-border bg-surface text-foreground hover:bg-surface-muted;
+  }
+
+  .btn-danger {
+    @apply border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20;
+  }
+}
