@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createProjectAction, type ActionState } from "../actions";
+import { createProjectActionRenamed, type ActionState } from "../actions";
 
 const initial: ActionState = {};
 
@@ -11,7 +11,7 @@ function FieldError({ message }: { message?: string }) {
 }
 
 export function NewProjectForm() {
-  const [state, formAction, pending] = useActionState(createProjectAction, initial);
+  const [state, formAction, pending] = useActionState(createProjectActionRenamed, initial);
 
   return (
     <form action={formAction} className="card space-y-5 p-6">
