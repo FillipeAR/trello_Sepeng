@@ -69,13 +69,10 @@ export async function createProjectAction(
     });
     projectId = project.id;
   } catch (error) {
-    return toState(error);
+    return { errors: [`DEBUG: createProject threw: ${error instanceof Error ? error.message : String(error)}`] };
   }
 
-  await processOutbox();
-  revalidatePath("/obras");
-  revalidatePath("/dashboard");
-  redirect(`/obras/${projectId}`);
+  return { success: true, errors: [`DEBUG: sucesso, projectId=${projectId}`] };
 }
 
 /**
