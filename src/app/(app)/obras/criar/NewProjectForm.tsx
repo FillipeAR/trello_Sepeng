@@ -5,89 +5,63 @@ import { createProjectAction, type ActionState } from "./actions";
 
 const initial: ActionState = {};
 
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="mt-1 text-xs text-danger">{message}</p>;
-}
-
 export function NewProjectForm() {
   const [state, formAction, pending] = useActionState(createProjectAction, initial);
 
   return (
-    <form action={formAction} className="card space-y-5 p-6">
-      {state.errors?.length ? (
-        <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-          {state.errors.map((e) => (
-            <div key={e}>{e}</div>
-          ))}
-        </div>
-      ) : null}
+    <form action={formAction} className="card space-y-4 p-6">
+      <p className="text-sm font-medium text-danger" role="alert">
+        {state.errors?.join(" ") || " "}
+      </p>
 
-      <div>
-        <label className="label" htmlFor="name">
-          Nome da obra
-        </label>
-        <input id="name" name="name" required className="input" placeholder="Ex.: Galpão Industrial BYD — Fase 2" />
-        <FieldError message={state.fieldErrors?.name} />
-      </div>
+      <input
+        name="name"
+        required
+        aria-label="Nome da obra"
+        placeholder="Nome da obra — ex.: Galpão Industrial BYD, Fase 2"
+        className="input"
+      />
+      <p className="text-xs text-danger">{state.fieldErrors?.name || " "}</p>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label className="label" htmlFor="client">
-            Cliente
-          </label>
-          <input id="client" name="client" required className="input" />
-          <FieldError message={state.fieldErrors?.client} />
-        </div>
-        <div>
-          <label className="label" htmlFor="contractValue">
-            Valor do contrato (R$)
-          </label>
-          <input
-            id="contractValue"
-            name="contractValue"
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            className="input"
-          />
-          <FieldError message={state.fieldErrors?.contractValue} />
-        </div>
-      </div>
+      <input name="client" required aria-label="Cliente" placeholder="Cliente" className="input" />
+      <p className="text-xs text-danger">{state.fieldErrors?.client || " "}</p>
 
-      <div>
-        <label className="label" htmlFor="location">
-          Localização
-        </label>
-        <input id="location" name="location" required className="input" placeholder="Cidade / UF" />
-        <FieldError message={state.fieldErrors?.location} />
-      </div>
+      <input
+        name="contractValue"
+        type="number"
+        step="0.01"
+        min="0"
+        required
+        aria-label="Valor do contrato em reais"
+        placeholder="Valor do contrato (R$)"
+        className="input"
+      />
+      <p className="text-xs text-danger">{state.fieldErrors?.contractValue || " "}</p>
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label className="label" htmlFor="plannedStartDate">
-            Início previsto
-          </label>
-          <input id="plannedStartDate" name="plannedStartDate" type="date" required className="input" />
-          <FieldError message={state.fieldErrors?.plannedStartDate} />
-        </div>
-        <div>
-          <label className="label" htmlFor="plannedEndDate">
-            Término previsto
-          </label>
-          <input id="plannedEndDate" name="plannedEndDate" type="date" required className="input" />
-          <FieldError message={state.fieldErrors?.plannedEndDate} />
-        </div>
-      </div>
+      <input
+        name="location"
+        required
+        aria-label="Localização"
+        placeholder="Localização — Cidade / UF"
+        className="input"
+      />
+      <p className="text-xs text-danger">{state.fieldErrors?.location || " "}</p>
 
-      <div>
-        <label className="label" htmlFor="scopeSummary">
-          Escopo resumido
-        </label>
-        <textarea id="scopeSummary" name="scopeSummary" rows={4} required className="input" />
-        <FieldError message={state.fieldErrors?.scopeSummary} />
-      </div>
+      <input name="plannedStartDate" type="date" required aria-label="Início previsto" className="input" />
+      <p className="text-xs text-danger">{state.fieldErrors?.plannedStartDate || " "}</p>
+
+      <input name="plannedEndDate" type="date" required aria-label="Término previsto" className="input" />
+      <p className="text-xs text-danger">{state.fieldErrors?.plannedEndDate || " "}</p>
+
+      <textarea
+        name="scopeSummary"
+        rows={4}
+        required
+        aria-label="Escopo resumido"
+        placeholder="Escopo resumido"
+        className="input"
+      />
+      <p className="text-xs text-danger">{state.fieldErrors?.scopeSummary || " "}</p>
 
       <button type="submit" disabled={pending} className="btn-primary">
         {pending ? "Cadastrando…" : "Cadastrar obra"}
