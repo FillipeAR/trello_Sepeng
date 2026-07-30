@@ -50,29 +50,7 @@ export async function createProjectAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const debugActor = await getActor();
-  if (!debugActor) {
-    return { errors: [`DEBUG: getActor() retornou null. formData keys: ${[...formData.keys()].join(",")}`] };
-  }
-  const actor = debugActor;
-  let projectId: string;
-
-  try {
-    const project = await createProject(actor, {
-      name: String(formData.get("name") ?? ""),
-      client: String(formData.get("client") ?? ""),
-      contractValue: Number(formData.get("contractValue") ?? 0),
-      location: String(formData.get("location") ?? ""),
-      plannedStartDate: parseLocalDate(String(formData.get("plannedStartDate") ?? "")),
-      plannedEndDate: parseLocalDate(String(formData.get("plannedEndDate") ?? "")),
-      scopeSummary: String(formData.get("scopeSummary") ?? ""),
-    });
-    projectId = project.id;
-  } catch (error) {
-    return { errors: [`DEBUG: createProject threw: ${error instanceof Error ? error.message : String(error)}`] };
-  }
-
-  return { success: true, errors: [`DEBUG: sucesso, projectId=${projectId}`] };
+  return { errors: ["DEBUG: no-op, cheguei aqui sem tocar em nada."] };
 }
 
 /**
