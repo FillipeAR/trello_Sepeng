@@ -19,7 +19,7 @@ export default async function AppLayout({
     { href: "/obras", label: "Obras", show: true },
     { href: "/minhas-tarefas", label: "Minhas tarefas", show: Boolean(actor.departmentId) },
     {
-      href: "/obras/cadastrar",
+      href: "/obras/criar",
       label: "Nova obra",
       show: actor.permissions.includes(PERMISSIONS.PROJECT_CREATE),
     },

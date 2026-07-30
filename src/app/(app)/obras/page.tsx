@@ -28,7 +28,7 @@ export default async function ObrasPage({
           </p>
         </div>
         {actor.permissions.includes(PERMISSIONS.PROJECT_CREATE) ? (
-          <Link href="/obras/cadastrar" className="btn-primary">
+          <Link href="/obras/criar" className="btn-primary">
             Nova obra
           </Link>
         ) : null}
