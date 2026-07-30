@@ -27,7 +27,7 @@ export function NewProjectForm() {
         <label className="label" htmlFor="name">
           Nome da obra
         </label>
-        <input id="name" name="name" required className="input" placeholder="Ex.: Galpão Industrial BYD — Fase 2" />
+        <input id="name" name="name" required defaultValue="Obra Padrão" className="input" placeholder="Ex.: Galpão Industrial BYD — Fase 2" />
         <FieldError message={state.fieldErrors?.name} />
       </div>
 
@@ -36,7 +36,7 @@ export function NewProjectForm() {
           <label className="label" htmlFor="client">
             Cliente
           </label>
-          <input id="client" name="client" required className="input" />
+          <input id="client" name="client" required defaultValue="Cliente Padrão" className="input" />
           <FieldError message={state.fieldErrors?.client} />
         </div>
         <div>
@@ -50,6 +50,7 @@ export function NewProjectForm() {
             step="0.01"
             min="0"
             required
+            defaultValue="1000"
             className="input"
           />
           <FieldError message={state.fieldErrors?.contractValue} />
@@ -60,7 +61,7 @@ export function NewProjectForm() {
         <label className="label" htmlFor="location">
           Localização
         </label>
-        <input id="location" name="location" required className="input" placeholder="Cidade / UF" />
+        <input id="location" name="location" required defaultValue="Goiânia, GO" className="input" placeholder="Cidade / UF" />
         <FieldError message={state.fieldErrors?.location} />
       </div>
 
@@ -69,14 +70,14 @@ export function NewProjectForm() {
           <label className="label" htmlFor="plannedStartDate">
             Início previsto
           </label>
-          <input id="plannedStartDate" name="plannedStartDate" type="date" required className="input" />
+          <input id="plannedStartDate" name="plannedStartDate" type="date" required defaultValue="2026-08-10" className="input" />
           <FieldError message={state.fieldErrors?.plannedStartDate} />
         </div>
         <div>
           <label className="label" htmlFor="plannedEndDate">
             Término previsto
           </label>
-          <input id="plannedEndDate" name="plannedEndDate" type="date" required className="input" />
+          <input id="plannedEndDate" name="plannedEndDate" type="date" required defaultValue="2026-09-10" className="input" />
           <FieldError message={state.fieldErrors?.plannedEndDate} />
         </div>
       </div>
@@ -85,7 +86,7 @@ export function NewProjectForm() {
         <label className="label" htmlFor="scopeSummary">
           Escopo resumido
         </label>
-        <textarea id="scopeSummary" name="scopeSummary" rows={4} required className="input" />
+        <textarea id="scopeSummary" name="scopeSummary" rows={4} required defaultValue="Escopo padrão de teste." className="input" />
         <FieldError message={state.fieldErrors?.scopeSummary} />
       </div>
 
