@@ -14,7 +14,7 @@ export function TestSub2Form() {
         <label className="label" htmlFor="projectName">
           Nome da obra
         </label>
-        <input id="projectName" name="projectName" required className="input" placeholder="Ex.: Galpão" />
+        <input id="projectName" name="projectName" className="input" placeholder="Ex.: Galpão" />
       </div>
 
       <button type="submit" disabled={pending} className="btn-primary">
