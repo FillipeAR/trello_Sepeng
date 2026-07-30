@@ -1,9 +1,12 @@
 "use server";
 
+import { requireActor } from "@/server/actor";
+
 export interface TestState {
   message?: string;
 }
 
 export async function testZAction(_prev: TestState, formData: FormData): Promise<TestState> {
-  return { message: `OK: ${formData.get("a")}/${formData.get("b")}/${formData.get("c")}` };
+  const actor = await requireActor();
+  return { message: `OK: ${actor.userEmail} ${formData.get("a")}/${formData.get("b")}/${formData.get("c")}` };
 }
