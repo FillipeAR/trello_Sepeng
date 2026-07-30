@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireActor } from "@/server/actor";
+import { getActor } from "@/server/actor";
 import { signOut } from "@/server/auth";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { getUnreadNotifications } from "@/modules/dashboard/queries";
@@ -11,7 +11,10 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const actor = await requireActor();
+  const actor = await getActor();
+  if (!actor) {
+    return <div style={{ padding: 40, fontSize: 20 }}>DEBUG: layout viu getActor() = null</div>;
+  }
   const notifications = await getUnreadNotifications(actor);
 
   const nav = [
