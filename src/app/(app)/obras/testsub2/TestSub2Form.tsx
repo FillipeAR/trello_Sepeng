@@ -7,7 +7,7 @@ export function TestSub2Form() {
   const [state, formAction] = useActionState(testSub2Action, {});
   return (
     <form action={formAction}>
-      <input type="text" name="visualHiddenViaCss" defaultValue="valorfixo" style={{ display: "none" }} />
+      <input type="text" name="visibleNoClass" defaultValue="valorfixo" />
       <button type="submit">Testar</button>
       <p>{state.message}</p>
     </form>
