@@ -4,12 +4,7 @@ import { PERMISSIONS } from "@/core/rbac/permissions";
 import { NewProjectForm } from "./NewProjectForm";
 
 export default async function NovaObraPage() {
-  const { getActor } = await import("@/server/actor");
-  const debugActor = await getActor();
-  if (!debugActor) {
-    return <div style={{ padding: 40, fontSize: 20 }}>DEBUG: página viu getActor() = null</div>;
-  }
-  const actor = debugActor;
+  const actor = await requireActor();
   if (!actor.permissions.includes(PERMISSIONS.PROJECT_CREATE)) redirect("/obras");
 
   return (

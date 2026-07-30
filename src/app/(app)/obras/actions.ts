@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getActor, requireActor } from "@/server/actor";
+import { requireActor } from "@/server/actor";
 import {
   CommandError,
   createProject,
@@ -46,11 +46,32 @@ function parseLocalDate(value: string): Date {
   return new Date(`${value}T00:00:00`);
 }
 
-export async function createProjectActionRenamed(
+export async function createProjectAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  return { errors: ["DEBUG: no-op, cheguei aqui sem tocar em nada."] };
+  const actor = await requireActor();
+  let projectId: string;
+
+  try {
+    const project = await createProject(actor, {
+      name: String(formData.get("name") ?? ""),
+      client: String(formData.get("client") ?? ""),
+      contractValue: Number(formData.get("contractValue") ?? 0),
+      location: String(formData.get("location") ?? ""),
+      plannedStartDate: parseLocalDate(String(formData.get("plannedStartDate") ?? "")),
+      plannedEndDate: parseLocalDate(String(formData.get("plannedEndDate") ?? "")),
+      scopeSummary: String(formData.get("scopeSummary") ?? ""),
+    });
+    projectId = project.id;
+  } catch (error) {
+    return toState(error);
+  }
+
+  await processOutbox();
+  revalidatePath("/obras");
+  revalidatePath("/dashboard");
+  redirect(`/obras/${projectId}`);
 }
 
 /**

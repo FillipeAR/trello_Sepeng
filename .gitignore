@@ -41,3 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# ferramentas locais do Claude Code / agentes (skills instaladas dinamicamente)
+/.agents
+/.claude/scheduled_tasks.lock
+/.claude/skills/neon
+/.claude/skills/neon-postgres
+/skills-lock.json

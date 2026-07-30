@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getActor } from "@/server/actor";
+import { requireActor } from "@/server/actor";
 import { signOut } from "@/server/auth";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { getUnreadNotifications } from "@/modules/dashboard/queries";
@@ -11,10 +11,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const actor = await getActor();
-  if (!actor) {
-    return <div style={{ padding: 40, fontSize: 20 }}>DEBUG: layout viu getActor() = null</div>;
-  }
+  const actor = await requireActor();
   const notifications = await getUnreadNotifications(actor);
 
   const nav = [
@@ -22,7 +19,7 @@ export default async function AppLayout({
     { href: "/obras", label: "Obras", show: true },
     { href: "/minhas-tarefas", label: "Minhas tarefas", show: Boolean(actor.departmentId) },
     {
-      href: "/obras/nova",
+      href: "/obras/cadastrar",
       label: "Nova obra",
       show: actor.permissions.includes(PERMISSIONS.PROJECT_CREATE),
     },
