@@ -8,6 +8,7 @@ export function TestSub2Form() {
   return (
     <form action={formAction}>
       <input type="text" name="visibleNoClass" defaultValue="valorfixo" className="input" />
+      <input type="date" name="dateField" defaultValue="2026-08-10" className="input" />
       <button type="submit">Testar</button>
       <p>{state.message}</p>
     </form>
