@@ -8,40 +8,26 @@ export function TestSub2Form() {
 
   return (
     <form action={formAction} className="card space-y-5 p-6">
-      <label className="label" htmlFor="name">
-        Nome da obra
-      </label>
-      <input id="name" name="name" required className="input" />
+      <span className="label">Nome da obra</span>
+      <input name="name" required className="input" />
 
-      <label className="label" htmlFor="client">
-        Cliente
-      </label>
-      <input id="client" name="client" required className="input" />
+      <span className="label">Cliente</span>
+      <input name="client" required className="input" />
 
-      <label className="label" htmlFor="contractValue">
-        Valor do contrato (R$)
-      </label>
-      <input id="contractValue" name="contractValue" type="number" step="0.01" min="0" required className="input" />
+      <span className="label">Valor do contrato (R$)</span>
+      <input name="contractValue" type="number" step="0.01" min="0" required className="input" />
 
-      <label className="label" htmlFor="location">
-        Localização
-      </label>
-      <input id="location" name="location" required className="input" />
+      <span className="label">Localização</span>
+      <input name="location" required className="input" />
 
-      <label className="label" htmlFor="plannedStartDate">
-        Início previsto
-      </label>
-      <input id="plannedStartDate" name="plannedStartDate" type="date" required className="input" />
+      <span className="label">Início previsto</span>
+      <input name="plannedStartDate" type="date" required className="input" />
 
-      <label className="label" htmlFor="plannedEndDate">
-        Término previsto
-      </label>
-      <input id="plannedEndDate" name="plannedEndDate" type="date" required className="input" />
+      <span className="label">Término previsto</span>
+      <input name="plannedEndDate" type="date" required className="input" />
 
-      <label className="label" htmlFor="scopeSummary">
-        Escopo resumido
-      </label>
-      <textarea id="scopeSummary" name="scopeSummary" rows={4} required className="input" />
+      <span className="label">Escopo resumido</span>
+      <textarea name="scopeSummary" rows={4} required className="input" />
 
       <button type="submit" disabled={pending} className="btn-primary">
         {pending ? "Cadastrando…" : "Cadastrar obra"}
