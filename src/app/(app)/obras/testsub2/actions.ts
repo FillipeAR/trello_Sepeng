@@ -9,16 +9,20 @@ export interface TestState {
   message?: string;
 }
 
-export async function testSub2Action(_prev: TestState, _formData: FormData): Promise<TestState> {
+function parseLocalDate(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+export async function testSub2Action(_prev: TestState, formData: FormData): Promise<TestState> {
   const actor = await requireActor();
   const project = await createProject(actor, {
-    name: "Teste Isolamento DB",
-    client: "Cliente Teste",
-    contractValue: 1000,
-    location: "Goiânia, GO",
-    plannedStartDate: new Date("2026-08-10"),
-    plannedEndDate: new Date("2026-09-10"),
-    scopeSummary: "Teste de isolamento da escrita no banco.",
+    name: String(formData.get("name") ?? ""),
+    client: String(formData.get("client") ?? ""),
+    contractValue: Number(formData.get("contractValue") ?? 0),
+    location: String(formData.get("location") ?? ""),
+    plannedStartDate: parseLocalDate(String(formData.get("plannedStartDate") ?? "")),
+    plannedEndDate: parseLocalDate(String(formData.get("plannedEndDate") ?? "")),
+    scopeSummary: String(formData.get("scopeSummary") ?? ""),
   });
   revalidatePath("/obras/testsub2");
   redirect(`/obras/testsub2/done?user=${actor.userEmail}&project=${project.id}`);
