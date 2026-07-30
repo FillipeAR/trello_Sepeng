@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireActor } from "@/server/actor";
+import { getActor, requireActor } from "@/server/actor";
 import {
   CommandError,
   createProject,
@@ -50,9 +50,11 @@ export async function createProjectAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  console.log("[DEBUG createProjectAction] start, formData keys:", [...formData.keys()]);
-  const actor = await requireActor();
-  console.log("[DEBUG createProjectAction] actor:", actor.userEmail);
+  const debugActor = await getActor();
+  if (!debugActor) {
+    return { errors: [`DEBUG: getActor() retornou null. formData keys: ${[...formData.keys()].join(",")}`] };
+  }
+  const actor = debugActor;
   let projectId: string;
 
   try {
