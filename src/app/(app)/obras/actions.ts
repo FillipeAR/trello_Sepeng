@@ -50,7 +50,9 @@ export async function createProjectAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  console.log("[DEBUG createProjectAction] start, formData keys:", [...formData.keys()]);
   const actor = await requireActor();
+  console.log("[DEBUG createProjectAction] actor:", actor.userEmail);
   let projectId: string;
 
   try {
