@@ -1,4 +1,3 @@
-import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { Actor } from "@/core/rbac/can";
 import { auth } from "./auth";
@@ -13,10 +12,16 @@ export interface SessionContext extends Actor {
 }
 
 /**
- * Identidade efetiva do usuário na organização ativa. Memoizado por request —
- * todo Server Component pode chamar sem multiplicar queries.
+ * Identidade efetiva do usuário na organização ativa.
+ *
+ * Não usa `cache()` do React de propósito: em Server Actions no runtime
+ * serverless da Vercel, o escopo de memoização por-request do `cache()` se
+ * mostrou instável (uma chamada concorrente sem sessão contaminava o
+ * resultado de outra, fazendo ações autenticadas caírem no /login). Duas
+ * consultas leves ao Auth.js/Prisma por request é um custo aceitável pela
+ * correção.
  */
-export const getActor = cache(async (): Promise<SessionContext | null> => {
+export async function getActor(): Promise<SessionContext | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
 
@@ -45,7 +50,7 @@ export const getActor = cache(async (): Promise<SessionContext | null> => {
     departmentName: membership.department?.name ?? null,
     roleName: membership.role.name,
   };
-});
+}
 
 /** Para páginas protegidas: devolve o ator ou manda para o login. */
 export async function requireActor(): Promise<SessionContext> {
