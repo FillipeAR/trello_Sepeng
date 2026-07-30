@@ -16,7 +16,7 @@ function parseLocalDate(value: string): Date {
 export async function testSub2Action(_prev: TestState, formData: FormData): Promise<TestState> {
   const actor = await requireActor();
   const project = await createProject(actor, {
-    name: String(formData.get("name") || "Nome padrão"),
+    name: String(formData.get("projectName") || "Nome padrão"),
     client: String(formData.get("client") || "Cliente padrão"),
     contractValue: Number(formData.get("contractValue") || 1000),
     location: String(formData.get("location") || "Goiânia, GO"),

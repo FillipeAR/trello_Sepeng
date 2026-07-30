@@ -11,10 +11,10 @@ export function TestSub2Form() {
       {state.message ? <p>{state.message}</p> : null}
 
       <div>
-        <label className="label" htmlFor="name">
+        <label className="label" htmlFor="projectName">
           Nome da obra
         </label>
-        <input id="name" name="name" required className="input" placeholder="Ex.: Galpão" />
+        <input id="projectName" name="projectName" required className="input" placeholder="Ex.: Galpão" />
       </div>
 
       <button type="submit" disabled={pending} className="btn-primary">
