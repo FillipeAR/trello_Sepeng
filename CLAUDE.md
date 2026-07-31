@@ -187,7 +187,15 @@ Versão publicada é imutável — o `seed.ts` já cria fluxos novos com `STAFF`
 publicada existente (local ou produção) só passa a usar isso depois de: criar rascunho em
 `/admin/fluxos`, editar o tipo dos dois campos e publicar. `DEMO_PROFESSIONALS` no seed é
 só para ambiente de demonstração — em produção o cadastro real entra por
-`/admin/profissionais`.
+`/admin/profissionais`. Produção já foi migrada (v3) via `scripts/migrate-staff-fields.ts`
+— o cadastro de profissionais em si começa vazio lá, precisa ser preenchido pela tela.
+
+Esse script também documenta uma pegadinha real do editor de fluxos: `createDraftVersion`
+clona a versão publicada campo a campo, ação a ação, com `await` sequencial — contra um
+banco remoto (Neon) isso passa fácil do timeout padrão de 5s do Prisma
+(`prisma.$transaction`) à medida que o fluxo cresce. Corrigido subindo o timeout desse
+comando pra 20s. Se "Criar rascunho do fluxo" começar a falhar/travar em produção outra
+vez com fluxos maiores, é o primeiro lugar a olhar.
 
 ### Próximos passos (V1), na ordem sugerida
 

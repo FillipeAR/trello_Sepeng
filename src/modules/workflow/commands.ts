@@ -205,7 +205,11 @@ export async function createDraftVersion(actor: SessionContext, input: { definit
     });
 
     return draft;
-  });
+  },
+  // Clona etapa por etapa, campo por campo — dezenas de writes sequenciais.
+  // Contra um banco remoto (Neon), isso passa fácil do timeout padrão de 5s.
+  { timeout: 20_000 },
+  );
 }
 
 export async function updateVersionNotes(actor: SessionContext, input: { versionId: string; notes: string }) {
