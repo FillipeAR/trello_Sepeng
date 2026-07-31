@@ -10,7 +10,7 @@ export async function getDirectoryDashboard(actor: SessionContext) {
   const now = new Date();
   const orgId = actor.organizationId;
 
-  const [total, active, completed, late, byStage, stageDurations] = await Promise.all([
+  const [total, active, completed, late, avgProgress, byStage, stageDurations] = await Promise.all([
     prisma.project.count({ where: { organizationId: orgId, deletedAt: null } }),
     prisma.project.count({ where: { organizationId: orgId, deletedAt: null, status: "ACTIVE" } }),
     prisma.project.count({ where: { organizationId: orgId, deletedAt: null, status: "COMPLETED" } }),
@@ -22,6 +22,12 @@ export async function getDirectoryDashboard(actor: SessionContext) {
         plannedEndDate: { lt: now },
       },
     }),
+    prisma.project
+      .aggregate({
+        where: { organizationId: orgId, deletedAt: null, status: "ACTIVE" },
+        _avg: { progressPercent: true },
+      })
+      .then((r) => Math.round(r._avg.progressPercent ?? 0)),
     prisma.stageInstance.findMany({
       where: { organizationId: orgId, status: { in: ["PENDING", "IN_PROGRESS"] } },
       include: { stage: { include: { department: true } } },
@@ -76,7 +82,7 @@ export async function getDirectoryDashboard(actor: SessionContext) {
   }
 
   return {
-    totals: { total, active, completed, late },
+    totals: { total, active, completed, late, avgProgress },
     bottlenecks: [...stageCounts.values()].sort((a, b) => b.count - a.count),
     stageMetrics: [...durations.values()]
       .sort((a, b) => a.order - b.order)

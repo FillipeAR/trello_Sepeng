@@ -1,25 +1,54 @@
 import Link from "next/link";
+import { ArrowRight, Building2, CheckCircle2, TrendingUp, TriangleAlert } from "lucide-react";
 import { requireActor } from "@/server/actor";
 import { getDepartmentDashboard, getDirectoryDashboard } from "@/modules/dashboard/queries";
 import { listMyQueue } from "@/modules/projects/queries";
 import { listMyReminders } from "@/modules/tasks/queries";
 import { formatDate, formatHours } from "@/lib/format";
 
-function Stat({
+const KPI_STYLES = {
+  indigo: { color: "#6366F1", bg: "#EEF2FF" },
+  blue: { color: "#3B82F6", bg: "#EFF6FF" },
+  red: { color: "#EF4444", bg: "#FEF2F2" },
+  green: { color: "#22C55E", bg: "#F0FDF4" },
+} as const;
+
+function KpiCard({
   label,
   value,
-  tone = "default",
+  icon: Icon,
+  tone,
+  progress,
+  href,
 }: {
   label: string;
   value: string | number;
-  tone?: "default" | "warning" | "success";
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  tone: keyof typeof KPI_STYLES;
+  progress?: number;
+  href?: string;
 }) {
-  const toneClass =
-    tone === "warning" ? "text-warning" : tone === "success" ? "text-success" : "text-foreground";
+  const { color, bg } = KPI_STYLES[tone];
   return (
-    <div className="card p-5">
-      <div className="text-xs uppercase tracking-wide text-muted">{label}</div>
-      <div className={`mt-2 text-3xl font-semibold ${toneClass}`}>{value}</div>
+    <div className="card min-w-[190px] flex-1 p-5">
+      <div
+        className="flex h-10 w-10 items-center justify-center rounded-[10px]"
+        style={{ background: bg }}
+      >
+        <Icon size={19} color={color} strokeWidth={1.75} />
+      </div>
+      <div className="mt-3.5 text-[13.5px] text-muted">{label}</div>
+      <div className="mt-0.5 text-[28px] font-extrabold tracking-tight">{value}</div>
+      {progress !== undefined ? (
+        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-muted">
+          <div className="h-full rounded-full" style={{ width: `${progress}%`, background: color }} />
+        </div>
+      ) : null}
+      {href ? (
+        <Link href={href} className="mt-3 inline-flex items-center gap-1 text-[13px] font-semibold text-primary">
+          Ver todas <ArrowRight size={13} />
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -36,26 +65,31 @@ export default async function DashboardPage() {
   const maxBottleneck = Math.max(1, ...directory.bottlenecks.map((b) => b.count));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
-        <p className="text-sm text-muted">
-          Olá, {actor.userName}. Visão geral das obras da {actor.organizationName}.
+        <h1 className="text-[26px] font-extrabold tracking-tight">Olá, {actor.userName.split(" ")[0]}! 👋</h1>
+        <p className="mt-1 text-[14.5px] text-muted">
+          Aqui está o resumo geral das obras da {actor.organizationName}.
         </p>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Obras cadastradas" value={directory.totals.total} />
-        <Stat label="Em andamento" value={directory.totals.active} />
-        <Stat label="Em atraso" value={directory.totals.late} tone="warning" />
-        <Stat label="Finalizadas" value={directory.totals.completed} tone="success" />
+      <section className="flex flex-wrap gap-[18px]">
+        <KpiCard label="Obras cadastradas" value={directory.totals.total} icon={Building2} tone="indigo" href="/obras" />
+        <KpiCard label="Em andamento" value={directory.totals.active} icon={TrendingUp} tone="blue" href="/obras" />
+        <KpiCard label="Em atraso" value={directory.totals.late} icon={TriangleAlert} tone="red" href="/obras" />
+        <KpiCard label="Finalizadas" value={directory.totals.completed} icon={CheckCircle2} tone="green" href="/obras" />
+        <KpiCard
+          label="Conclusão média"
+          value={`${directory.totals.avgProgress}%`}
+          icon={TrendingUp}
+          tone="green"
+          progress={directory.totals.avgProgress}
+        />
       </section>
 
       {department ? (
         <section className="card p-5">
-          <h2 className="text-sm font-semibold">
-            Seu departamento — {department.departmentName}
-          </h2>
+          <h2 className="text-sm font-semibold">Seu departamento — {department.departmentName}</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-4">
             <div>
               <div className="text-xs text-muted">Aguardando ação</div>
@@ -77,10 +111,10 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold">Gargalos por etapa</h2>
-          <p className="mb-4 text-xs text-muted">Quantas obras estão paradas em cada etapa agora.</p>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section className="card p-[22px]">
+          <h2 className="text-base font-bold">Gargalos por etapa</h2>
+          <p className="mb-4 mt-1 text-xs text-muted">Quantas obras estão paradas em cada etapa agora.</p>
           {directory.bottlenecks.length === 0 ? (
             <p className="text-sm text-muted">Nenhuma obra em andamento.</p>
           ) : (
@@ -90,19 +124,14 @@ export default async function DashboardPage() {
                   <div className="mb-1 flex items-baseline justify-between text-sm">
                     <span>
                       {b.name}
-                      {b.department ? (
-                        <span className="ml-2 text-xs text-muted">{b.department}</span>
-                      ) : null}
+                      {b.department ? <span className="ml-2 text-xs text-muted">{b.department}</span> : null}
                     </span>
                     <span className="font-semibold">{b.count}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
                     <div
                       className="h-full rounded-full"
-                      style={{
-                        width: `${(b.count / maxBottleneck) * 100}%`,
-                        backgroundColor: b.color,
-                      }}
+                      style={{ width: `${(b.count / maxBottleneck) * 100}%`, backgroundColor: b.color }}
                     />
                   </div>
                 </li>
@@ -111,9 +140,9 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold">Tempo médio por etapa</h2>
-          <p className="mb-4 text-xs text-muted">
+        <section className="card p-[22px]">
+          <h2 className="text-base font-bold">Tempo médio por etapa</h2>
+          <p className="mb-4 mt-1 text-xs text-muted">
             Baseado nas etapas já concluídas — alimenta a análise de produtividade.
           </p>
           <table className="w-full text-sm">
@@ -141,12 +170,12 @@ export default async function DashboardPage() {
         </section>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         {queue.length > 0 ? (
-          <section className="card p-5">
+          <section className="card p-[22px]">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Aguardando você</h2>
-              <Link href="/minhas-tarefas" className="text-xs text-primary">
+              <h2 className="text-base font-bold">Aguardando você</h2>
+              <Link href="/minhas-tarefas" className="text-[13px] font-semibold text-primary">
                 Ver todas
               </Link>
             </div>
@@ -155,13 +184,13 @@ export default async function DashboardPage() {
                 <li key={p.id}>
                   <Link
                     href={`/obras/${p.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
+                    className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition hover:bg-surface-muted"
                   >
                     <span>
                       <span className="font-mono text-xs text-muted">{p.code}</span>{" "}
                       <span className="font-medium">{p.name}</span>
                     </span>
-                    <span className={p.isLate ? "text-xs text-warning" : "text-xs text-muted"}>
+                    <span className={p.isLate ? "text-xs font-semibold text-warning" : "text-xs text-muted"}>
                       {p.isLate ? "Atrasada" : p.displayStatus}
                     </span>
                   </Link>
@@ -172,10 +201,10 @@ export default async function DashboardPage() {
         ) : null}
 
         {reminders.length > 0 ? (
-          <section className="card p-5">
+          <section className="card p-[22px]">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Meus lembretes</h2>
-              <Link href="/lembretes" className="text-xs text-primary">
+              <h2 className="text-base font-bold">Meus lembretes</h2>
+              <Link href="/lembretes" className="text-[13px] font-semibold text-primary">
                 Ver todos
               </Link>
             </div>
@@ -186,13 +215,13 @@ export default async function DashboardPage() {
                   <li key={r.id}>
                     <Link
                       href={`/obras/${r.project.id}`}
-                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
+                      className="flex items-center justify-between rounded-xl px-3 py-2.5 text-sm transition hover:bg-surface-muted"
                     >
                       <span>
                         <span className="font-mono text-xs text-muted">{r.project.code}</span>{" "}
                         <span className="font-medium">{r.title}</span>
                       </span>
-                      <span className={late ? "text-xs font-medium text-warning" : "text-xs text-muted"}>
+                      <span className={late ? "text-xs font-semibold text-warning" : "text-xs text-muted"}>
                         {r.dueAt ? formatDate(r.dueAt) : "Sem prazo"}
                       </span>
                     </Link>
