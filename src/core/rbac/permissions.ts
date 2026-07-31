@@ -28,6 +28,7 @@ export const PERMISSIONS = {
   USER_MANAGE: "user:manage",
   ROLE_MANAGE: "role:manage",
   DEPARTMENT_MANAGE: "department:manage",
+  STAFF_MANAGE: "staff:manage",
 
   // Transversal
   AUDIT_READ: "audit:read",
@@ -58,6 +59,7 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.USER_MANAGE, category: "Administração", description: "Gerenciar usuários e acessos" },
   { key: PERMISSIONS.ROLE_MANAGE, category: "Administração", description: "Gerenciar papéis e permissões" },
   { key: PERMISSIONS.DEPARTMENT_MANAGE, category: "Administração", description: "Gerenciar departamentos" },
+  { key: PERMISSIONS.STAFF_MANAGE, category: "Administração", description: "Gerenciar o cadastro de engenheiros e encarregados" },
   { key: PERMISSIONS.AUDIT_READ, category: "Transversal", description: "Consultar a trilha de auditoria" },
   { key: PERMISSIONS.REPORT_READ, category: "Transversal", description: "Acessar relatórios e indicadores" },
   { key: PERMISSIONS.COMMENT_CREATE, category: "Transversal", description: "Comentar em obras e etapas" },
@@ -98,6 +100,7 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.REPORT_READ,
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
+      PERMISSIONS.STAFF_MANAGE,
     ],
   },
   {
@@ -127,6 +130,7 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.REPORT_READ,
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
+      PERMISSIONS.STAFF_MANAGE,
     ],
   },
   {

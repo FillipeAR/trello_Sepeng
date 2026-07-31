@@ -171,6 +171,24 @@ widget "Meus lembretes" no `/dashboard`. Atribuir um lembrete a alguém enfileir
 contrário dos demais eventos) — ver `resolveRecipients` em
 `src/modules/notifications/dispatcher.ts`.
 
+### Cadastro de profissionais (engenheiros e encarregados) — entregue
+
+Os campos "Gerente responsável" e "Encarregado responsável" (etapa Diretoria) eram tipo
+`USER` — só aceitavam quem tinha login no sistema, forçando criar conta pra cada engenheiro
+de campo. Novo tipo de campo `STAFF`, alimentado por um cadastro próprio (`Professional`,
+sem relação com `User`/login): `src/modules/staff/` (commands/queries) +
+`/admin/profissionais` (permissão `staff:manage`, dada a administrador/diretoria/RH). O
+editor de fluxos (`FormPieces.tsx`) já lista "Profissional (engenheiro/encarregado)" como
+tipo selecionável; `DynamicStageForm` renderiza como dropdown "Nome — Função" quando o tipo
+é `STAFF` — mesmo padrão de armazenar o nome como string que `USER` já usava (sem FK).
+`quantidade_funcionarios` continua `NUMBER`, sem mudança.
+
+Versão publicada é imutável — o `seed.ts` já cria fluxos novos com `STAFF`, mas a versão
+publicada existente (local ou produção) só passa a usar isso depois de: criar rascunho em
+`/admin/fluxos`, editar o tipo dos dois campos e publicar. `DEMO_PROFESSIONALS` no seed é
+só para ambiente de demonstração — em produção o cadastro real entra por
+`/admin/profissionais`.
+
 ### Próximos passos (V1), na ordem sugerida
 
 1. **Upload real de anexos** (Vercel Blob) — hoje o campo `FILE` aceita link/referência.

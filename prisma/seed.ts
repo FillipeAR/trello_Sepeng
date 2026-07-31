@@ -25,6 +25,17 @@ const DEPARTMENTS = [
   { slug: "execucao", name: "Execução de Obra" },
 ];
 
+/**
+ * Engenheiros e encarregados não precisam de login — são o cadastro que
+ * alimenta os campos STAFF ("Gerente responsável", "Encarregado responsável").
+ */
+const DEMO_PROFESSIONALS = [
+  { name: "Marcos Andrade", role: "Engenheiro civil", phone: null },
+  { name: "Paulo Vieira", role: "Engenheiro civil", phone: null },
+  { name: "Cláudio Ramos", role: "Encarregado de obra", phone: null },
+  { name: "Sérgio Nunes", role: "Encarregado de obra", phone: null },
+];
+
 const DEMO_USERS = [
   { name: "Administrador", email: "admin@obraflow.com", roleSlug: "administrador", departmentSlug: null },
   { name: "Carla Diretoria", email: "diretoria@obraflow.com", roleSlug: "diretoria", departmentSlug: "diretoria" },
@@ -69,8 +80,8 @@ const STAGE_BLUEPRINT = [
     slaHours: 48,
     color: "#6366f1",
     fields: [
-      { key: "gerente", label: "Gerente responsável", type: "USER", required: true },
-      { key: "encarregado", label: "Encarregado responsável", type: "USER", required: true },
+      { key: "gerente", label: "Gerente responsável", type: "STAFF", required: true },
+      { key: "encarregado", label: "Encarregado responsável", type: "STAFF", required: true },
       { key: "equipe", label: "Equipe necessária", type: "USER_MULTI", required: false },
       { key: "quantidade_funcionarios", label: "Quantidade de funcionários", type: "NUMBER", required: true },
       { key: "recursos_necessarios", label: "Recursos necessários", type: "TEXTAREA", required: true },
@@ -284,6 +295,18 @@ async function main() {
         departmentId: u.departmentSlug ? departments.get(u.departmentSlug) : null,
       },
     });
+  }
+
+  console.log("→ Profissionais de campo (engenheiros e encarregados)…");
+  for (const p of DEMO_PROFESSIONALS) {
+    const existing = await prisma.professional.findFirst({
+      where: { organizationId: org.id, name: p.name, deletedAt: null },
+    });
+    if (!existing) {
+      await prisma.professional.create({
+        data: { organizationId: org.id, name: p.name, role: p.role, phone: p.phone },
+      });
+    }
   }
 
   console.log("→ Fluxo padrão (8 etapas)…");

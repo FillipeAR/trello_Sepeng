@@ -4,6 +4,7 @@ import { requireActor } from "@/server/actor";
 import { prisma } from "@/server/db";
 import { getProjectDetail } from "@/modules/projects/queries";
 import { listProjectTasks } from "@/modules/tasks/queries";
+import { listProfessionals } from "@/modules/staff/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
@@ -18,13 +19,14 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
 
   const { project, activeStages, timeline, progress, updates } = detail;
 
-  const [users, tasks] = await Promise.all([
+  const [users, tasks, professionals] = await Promise.all([
     prisma.membership.findMany({
       where: { organizationId: actor.organizationId, isActive: true },
       include: { user: { select: { id: true, name: true } } },
       orderBy: { user: { name: "asc" } },
     }),
     listProjectTasks(actor, project.id),
+    listProfessionals(actor),
   ]);
 
   return (
@@ -129,6 +131,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
                 stage={stage}
                 actions={actions}
                 users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
+                professionals={professionals.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
               />
             ))
           ) : (

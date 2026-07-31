@@ -94,7 +94,8 @@ function fieldDataFromForm(formData: FormData) {
     | "USER"
     | "USER_MULTI"
     | "CHECKBOX"
-    | "FILE";
+    | "FILE"
+    | "STAFF";
   const needsOptions = type === "SELECT" || type === "MULTISELECT";
   return {
     label: str(formData, "label"),

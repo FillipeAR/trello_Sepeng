@@ -15,7 +15,8 @@ export type FieldType =
   | "USER"
   | "USER_MULTI"
   | "CHECKBOX"
-  | "FILE";
+  | "FILE"
+  | "STAFF";
 
 export type ActionKind = "ADVANCE" | "RETURN" | "REJECT" | "FINISH";
 export type StageMode = "SEQUENTIAL" | "PARALLEL";

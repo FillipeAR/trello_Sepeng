@@ -509,6 +509,7 @@ const fieldSchema = z.object({
     "USER_MULTI",
     "CHECKBOX",
     "FILE",
+    "STAFF",
   ]),
   required: z.boolean().default(false),
   helpText: z.string().optional().nullable(),

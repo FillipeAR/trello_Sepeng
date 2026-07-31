@@ -205,6 +205,10 @@ responsável e prazo opcionais. CRUD em `src/modules/tasks/`, seção na página
 página `/lembretes` (cross-obra) e widget no dashboard. Atribuição notifica só o
 responsável via outbox (`task.assigned`).
 
+✅ Campo `STAFF` — tipo de campo alimentado por `Professional`, um cadastro de engenheiros
+e encarregados sem login (`/admin/profissionais`), para não obrigar conta de usuário só
+pra aparecer em "Gerente responsável"/"Encarregado responsável".
+
 Falta:
 escalonamento automático por SLA vencido · upload real de anexos (Vercel Blob) ·
 comentários com @menção · registro de progresso com fotos · relatório final de

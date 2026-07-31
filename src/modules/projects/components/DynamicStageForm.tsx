@@ -11,6 +11,12 @@ export interface UserOption {
   name: string;
 }
 
+export interface ProfessionalOption {
+  id: string;
+  name: string;
+  role: string;
+}
+
 /**
  * Renderiza o formulário da etapa a partir da CONFIGURAÇÃO (`StageField`).
  * Adicionar um campo novo na etapa da Diretoria é inserir uma linha no banco —
@@ -19,10 +25,12 @@ export interface UserOption {
 function Field({
   field,
   users,
+  professionals,
   error,
 }: {
   field: StageFieldDef;
   users: UserOption[];
+  professionals: ProfessionalOption[];
   error?: string;
 }) {
   const name = `field.${field.key}`;
@@ -97,6 +105,18 @@ function Field({
         </select>
       );
       break;
+    case "STAFF":
+      control = (
+        <select {...common} defaultValue="">
+          <option value="">Selecione…</option>
+          {professionals.map((p) => (
+            <option key={p.id} value={p.name}>
+              {p.name} — {p.role}
+            </option>
+          ))}
+        </select>
+      );
+      break;
     case "FILE":
       control = (
         <input
@@ -129,11 +149,13 @@ export function DynamicStageForm({
   stage,
   actions,
   users,
+  professionals,
 }: {
   projectId: string;
   stage: StageDef;
   actions: AvailableAction[];
   users: UserOption[];
+  professionals: ProfessionalOption[];
 }) {
   const [state, formAction, pending] = useActionState(executeStageActionForm, initial);
   const [actionKey, setActionKey] = useState<string>(
@@ -190,6 +212,7 @@ export function DynamicStageForm({
               key={field.id}
               field={field}
               users={users}
+              professionals={professionals}
               error={state.fieldErrors?.[field.key]}
             />
           ))}

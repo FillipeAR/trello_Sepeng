@@ -137,8 +137,9 @@ const FIELD_TYPES: [string, string][] = [
   ["DATE", "Data"],
   ["SELECT", "Lista (uma opção)"],
   ["MULTISELECT", "Lista (múltipla escolha)"],
-  ["USER", "Usuário"],
-  ["USER_MULTI", "Usuários (múltiplos)"],
+  ["USER", "Usuário do sistema"],
+  ["USER_MULTI", "Usuários do sistema (múltiplos)"],
+  ["STAFF", "Profissional (engenheiro/encarregado)"],
   ["CHECKBOX", "Sim / Não"],
   ["FILE", "Arquivo"],
 ];

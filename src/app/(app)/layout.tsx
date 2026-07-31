@@ -29,6 +29,11 @@ export default async function AppLayout({
       label: "Fluxos",
       show: actor.permissions.includes(PERMISSIONS.WORKFLOW_READ),
     },
+    {
+      href: "/admin/profissionais",
+      label: "Engenheiros e encarregados",
+      show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
+    },
   ].filter((item) => item.show);
 
   async function logout() {
