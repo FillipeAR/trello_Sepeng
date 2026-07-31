@@ -106,6 +106,11 @@ senha `obraflow123`.
   reais rodam contra o Neon em produção (`prisma migrate deploy`).
 - O projeto é **ESM** (`"type": "module"`). Scripts avulsos rodam com `npx tsx`.
 - A pasta tem espaço no nome ("Projeto Trello Sepeng") — cite caminhos entre aspas no shell.
+- **Permissão nova em `PERMISSIONS`/`PERMISSION_CATALOG` não chega em produção sozinha.**
+  `RolePermission` é dado, semeado por `prisma/seed.ts`, que não roda de novo a cada deploy.
+  Adicionar uma permissão e dar pra um papel em `DEFAULT_ROLES` só vale localmente até
+  alguém rodar a sincronização em produção — use `scripts/sync-permissions.ts` (só
+  permissões/papéis, não mexe em usuário/fluxo/dado de negócio) em vez do seed completo.
 
 ## Estado atual
 
