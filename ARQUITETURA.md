@@ -191,14 +191,19 @@ como nova versão imutável. Reordenação por botões subir/descer, não arrast
 mesma capacidade, sem dependência de drag-and-drop.
 
 ✅ Etapas paralelas — bifurcação e convergência (`ALL`/`ANY`) no engine e no command
-handler, com múltiplas `StageInstance` ativas simultaneamente por obra. Configurar uma
-bifurcação ainda exige script (o editor visual não cria `WorkflowTransition` pela tela) —
-ver `scripts/demo-etapa-paralela.ts`.
+handler, com múltiplas `StageInstance` ativas simultaneamente por obra. `scripts/demo-etapa-paralela.ts`
+segue como referência de exemplo.
+
+✅ Editor de transições em `/admin/fluxos/[versionId]/editar` — CRUD completo
+(`createTransition`/`updateTransition`/`deleteTransition`/`moveTransition`) com destino,
+ação de origem opcional e uma condição simples (comparação única, sem `and`/`or`/`not`
+aninhados na V1). É o que faltava para configurar bifurcação e roteamento condicional pela
+tela, sem script.
 
 Falta:
-editor de transições no admin de fluxos · escalonamento automático por SLA vencido ·
-upload real de anexos (Vercel Blob) · comentários com @menção · registro de progresso com
-fotos · relatório final de encerramento · exportação CSV/PDF.
+escalonamento automático por SLA vencido · upload real de anexos (Vercel Blob) ·
+comentários com @menção · registro de progresso com fotos · relatório final de
+encerramento · exportação CSV/PDF.
 
 **V2 — escala e integração**
 Worker de outbox em Vercel Queues com e-mail (Resend) e WhatsApp (Meta Cloud API) ·

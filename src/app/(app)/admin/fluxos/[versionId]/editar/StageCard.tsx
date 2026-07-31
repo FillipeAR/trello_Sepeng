@@ -4,18 +4,22 @@ import { useActionState, useRef } from "react";
 import {
   createActionAction,
   createFieldAction,
+  createTransitionAction,
   deleteActionAction,
   deleteFieldAction,
   deleteStageAction,
+  deleteTransitionAction,
   moveActionAction,
   moveFieldAction,
   moveStageAction,
+  moveTransitionAction,
   updateActionAction,
   updateFieldAction,
   updateStageAction,
+  updateTransitionAction,
   type ActionState,
 } from "../../actions";
-import { ActionFieldSet, ErrorBanner, FieldFieldSet, StageFieldSet } from "./FormPieces";
+import { ActionFieldSet, ErrorBanner, FieldFieldSet, StageFieldSet, TransitionFieldSet } from "./FormPieces";
 import { ConfirmSubmitButton } from "./ConfirmSubmitButton";
 
 const initial: ActionState = {};
@@ -39,6 +43,14 @@ interface StageActionData {
   variant: string;
 }
 
+interface StageTransitionData {
+  id: string;
+  toStageId: string;
+  actionId: string | null;
+  condition: unknown;
+  order: number;
+}
+
 export interface StageData {
   id: string;
   key: string;
@@ -54,6 +66,21 @@ export interface StageData {
   color: string;
   fields: StageFieldData[];
   actions: StageActionData[];
+  transitions: StageTransitionData[];
+}
+
+/** Decompõe o JSON de `condition` de volta nos campos simples do formulário. */
+function decomposeCondition(condition: unknown): {
+  op: string;
+  path: string;
+  value: string;
+} {
+  if (!condition || typeof condition !== "object") return { op: "always", path: "", value: "" };
+  const c = condition as Record<string, unknown>;
+  const op = typeof c.op === "string" ? c.op : "always";
+  const path = typeof c.path === "string" ? c.path : "";
+  const value = Array.isArray(c.value) ? c.value.join(", ") : c.value !== undefined ? String(c.value) : "";
+  return { op, path, value };
 }
 
 function optionsToRaw(options: unknown): string {
@@ -157,6 +184,13 @@ export function StageCard({
         actions={stage.actions}
         stageOptions={stageOptions}
         permissionOptions={permissionOptions}
+      />
+      <TransitionsSection
+        versionId={versionId}
+        stageId={stage.id}
+        transitions={stage.transitions}
+        stageOptions={stageOptions}
+        actionOptions={stage.actions.map((a) => ({ id: a.id, label: a.label }))}
       />
     </div>
   );
@@ -414,6 +448,183 @@ function NewActionForm({
       <ActionFieldSet stageOptions={stageOptions} permissionOptions={permissionOptions} />
       <button type="submit" disabled={pending} className="btn-ghost px-2 py-1 text-xs">
         {pending ? "Adicionando…" : "Adicionar ação"}
+      </button>
+      <ErrorBanner errors={state.errors} />
+    </form>
+  );
+}
+
+// --- Transições ------------------------------------------------------------
+
+const CONDITION_LABELS: Record<string, string> = {
+  eq: "=",
+  neq: "≠",
+  gt: ">",
+  gte: "≥",
+  lt: "<",
+  lte: "≤",
+  in: "em",
+  nin: "não em",
+  isEmpty: "vazio",
+  isNotEmpty: "não vazio",
+};
+
+function conditionSummary(condition: unknown): string {
+  const { op, path, value } = decomposeCondition(condition);
+  if (op === "always") return "sempre";
+  if (op === "isEmpty" || op === "isNotEmpty") return `${path} ${CONDITION_LABELS[op]}`;
+  return `${path} ${CONDITION_LABELS[op] ?? op} ${value}`;
+}
+
+function TransitionsSection({
+  versionId,
+  stageId,
+  transitions,
+  stageOptions,
+  actionOptions,
+}: {
+  versionId: string;
+  stageId: string;
+  transitions: StageTransitionData[];
+  stageOptions: { id: string; name: string }[];
+  actionOptions: { id: string; label: string }[];
+}) {
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+        Transições ({transitions.length})
+      </h3>
+      <p className="text-xs text-muted">
+        Para onde a obra vai ao sair desta etapa. Sem transição explícita, o motor usa a
+        próxima etapa por ordem (ou o destino da ação, se definido).
+      </p>
+      <div className="space-y-2">
+        {transitions.map((transition, i) => (
+          <TransitionRow
+            key={transition.id}
+            versionId={versionId}
+            transition={transition}
+            stageOptions={stageOptions}
+            actionOptions={actionOptions}
+            isFirst={i === 0}
+            isLast={i === transitions.length - 1}
+          />
+        ))}
+      </div>
+      <NewTransitionForm
+        versionId={versionId}
+        stageId={stageId}
+        stageOptions={stageOptions}
+        actionOptions={actionOptions}
+      />
+    </div>
+  );
+}
+
+function TransitionRow({
+  versionId,
+  transition,
+  stageOptions,
+  actionOptions,
+  isFirst,
+  isLast,
+}: {
+  versionId: string;
+  transition: StageTransitionData;
+  stageOptions: { id: string; name: string }[];
+  actionOptions: { id: string; label: string }[];
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(updateTransitionAction, initial);
+  const [moveState, moveFormAction] = useActionState(moveTransitionAction, initial);
+  const [deleteState, deleteFormAction] = useActionState(deleteTransitionAction, initial);
+  const decomposed = decomposeCondition(transition.condition);
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <form action={formAction} className="flex flex-wrap items-start gap-2">
+        <input type="hidden" name="versionId" value={versionId} />
+        <input type="hidden" name="transitionId" value={transition.id} />
+        <TransitionFieldSet
+          stageOptions={stageOptions}
+          actionOptions={actionOptions}
+          defaults={{
+            toStageId: transition.toStageId,
+            actionId: transition.actionId,
+            conditionOp: decomposed.op,
+            conditionPath: decomposed.path,
+            conditionValue: decomposed.value,
+          }}
+        />
+        <button type="submit" disabled={pending} className="btn-ghost px-2 py-1 text-xs">
+          {pending ? "Salvando…" : "Salvar"}
+        </button>
+      </form>
+      <ErrorBanner errors={state.errors} />
+      <p className="mt-2 text-xs text-muted">
+        Condição: <span className="font-mono">{conditionSummary(transition.condition)}</span>
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <form action={moveFormAction}>
+          <input type="hidden" name="versionId" value={versionId} />
+          <input type="hidden" name="transitionId" value={transition.id} />
+          <input type="hidden" name="direction" value="up" />
+          <button type="submit" disabled={isFirst} className="btn-ghost px-2 py-0.5 text-xs">
+            Subir
+          </button>
+        </form>
+        <form action={moveFormAction}>
+          <input type="hidden" name="versionId" value={versionId} />
+          <input type="hidden" name="transitionId" value={transition.id} />
+          <input type="hidden" name="direction" value="down" />
+          <button type="submit" disabled={isLast} className="btn-ghost px-2 py-0.5 text-xs">
+            Descer
+          </button>
+        </form>
+        <form action={deleteFormAction}>
+          <input type="hidden" name="versionId" value={versionId} />
+          <input type="hidden" name="transitionId" value={transition.id} />
+          <ConfirmSubmitButton confirmMessage="Remover esta transição?" className="btn-danger px-2 py-0.5 text-xs">
+            Excluir
+          </ConfirmSubmitButton>
+        </form>
+        <ErrorBanner errors={[...(moveState.errors ?? []), ...(deleteState.errors ?? [])]} />
+      </div>
+    </div>
+  );
+}
+
+function NewTransitionForm({
+  versionId,
+  stageId,
+  stageOptions,
+  actionOptions,
+}: {
+  versionId: string;
+  stageId: string;
+  stageOptions: { id: string; name: string }[];
+  actionOptions: { id: string; label: string }[];
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, formAction, pending] = useActionState(async (prev: ActionState, formData: FormData) => {
+    const result = await createTransitionAction(prev, formData);
+    if (result.success) formRef.current?.reset();
+    return result;
+  }, initial);
+
+  return (
+    <form
+      ref={formRef}
+      action={formAction}
+      className="flex flex-wrap items-start gap-2 rounded-lg border border-dashed border-border p-3"
+    >
+      <input type="hidden" name="versionId" value={versionId} />
+      <input type="hidden" name="stageId" value={stageId} />
+      <TransitionFieldSet stageOptions={stageOptions} actionOptions={actionOptions} />
+      <button type="submit" disabled={pending} className="btn-ghost px-2 py-1 text-xs">
+        {pending ? "Adicionando…" : "Adicionar transição"}
       </button>
       <ErrorBanner errors={state.errors} />
     </form>

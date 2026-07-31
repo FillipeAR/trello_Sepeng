@@ -26,6 +26,7 @@ export default async function EditarFluxoPage({
         include: {
           fields: { orderBy: { order: "asc" } },
           actions: { orderBy: { order: "asc" } },
+          outgoing: { orderBy: { order: "asc" } },
         },
       },
     },
@@ -70,7 +71,7 @@ export default async function EditarFluxoPage({
           <StageCard
             key={stage.id}
             versionId={version.id}
-            stage={stage}
+            stage={{ ...stage, transitions: stage.outgoing }}
             index={index}
             isFirst={index === 0}
             isLast={index === version.stages.length - 1}

@@ -142,12 +142,21 @@ seguem ativas (`null` quando há mais de uma). Engine puro e testado em
 `engine.test.ts`; orquestração transacional em
 `src/modules/projects/commands.ts:executeStageAction`.
 
-**Limitação conhecida**: bifurcar exige `WorkflowTransition` explícitas (uma por ramo) — o
-editor visual (`/admin/fluxos`) ainda não tem tela para criar transições, só
-`StageAction.targetStageId` (destino único). Por ora, configura-se uma bifurcação via
-script, no espírito do `scripts/demo-inserir-etapa.ts` — ver
-`scripts/demo-etapa-paralela.ts`, que bifurca Diretoria em RH + Segurança, convergindo em
-Financeiro. Rodar num rascunho e publicar como as demais mudanças de fluxo.
+Bifurcar exige `WorkflowTransition` explícitas (uma por ramo) — antes só dava pra criar
+via script (`scripts/demo-etapa-paralela.ts`); agora o editor visual também resolve isso
+(ver seção seguinte).
+
+### Editor de transições — entregue
+
+Seção "Transições" em cada etapa de `/admin/fluxos/[versionId]/editar` (`StageCard.tsx`),
+com CRUD completo (`createTransition`/`updateTransition`/`deleteTransition`/`moveTransition`
+em `src/modules/workflow/commands.ts`): destino, ação de origem (ou "qualquer ação") e uma
+condição simples (`always`/`eq`/`neq`/`gt`/`gte`/`lt`/`lte`/`in`/`nin`/`isEmpty`/`isNotEmpty`
+sobre um único `path`, ex. `project.contractValue`) — monta o JSON avaliado por
+`src/core/workflow/conditions.ts`. V1 não expõe `and`/`or`/`not` aninhados (o tipo `Condition`
+suporta, mas a UI fica em uma comparação por transição — cobre bifurcação e roteamento
+condicional sem precisar de script). `scripts/demo-etapa-paralela.ts` continua valendo como
+referência/atalho, mas deixou de ser o único caminho.
 
 ### Próximos passos (V1), na ordem sugerida
 
@@ -156,5 +165,3 @@ Financeiro. Rodar num rascunho e publicar como as demais mudanças de fluxo.
 3. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
    `sla.breached`.
 4. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
-5. **Editor de transições** no admin de fluxos — pré-requisito para configurar etapas
-   paralelas (e condições) pela tela, sem script.

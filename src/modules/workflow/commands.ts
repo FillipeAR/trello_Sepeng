@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { hasPermission } from "@/core/rbac/can";
 import { PERMISSIONS, PERMISSION_CATALOG } from "@/core/rbac/permissions";
+import { Prisma } from "@/generated/prisma/client";
 import type { SessionContext } from "@/server/actor";
 import { prisma, type Tx } from "@/server/db";
 import { writeAudit } from "@/server/audit";
@@ -835,5 +836,246 @@ export async function moveAction(actor: SessionContext, input: { actionId: strin
     const other = actions[swapIndex];
     await tx.stageAction.update({ where: { id: action.id }, data: { order: other.order } });
     await tx.stageAction.update({ where: { id: other.id }, data: { order: action.order } });
+  });
+}
+
+// --- Transições ----------------------------------------------------------------
+
+const conditionOpSchema = z.enum([
+  "always",
+  "eq",
+  "neq",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "in",
+  "nin",
+  "isEmpty",
+  "isNotEmpty",
+]);
+
+const transitionSchema = z.object({
+  toStageId: z.string().min(1, "Selecione a etapa de destino."),
+  actionId: z.string().nullable().optional(),
+  conditionOp: conditionOpSchema.default("always"),
+  conditionPath: z.string().nullable().optional(),
+  conditionValue: z.string().nullable().optional(),
+});
+
+export type TransitionInput = z.infer<typeof transitionSchema>;
+
+/**
+ * Monta o JSON de `condition` (avaliado por src/core/workflow/conditions.ts) a
+ * partir dos campos simples do formulário. V1 do editor não expõe and/or/not —
+ * uma única comparação por transição já cobre bifurcação e condição de rota.
+ */
+function buildCondition(data: TransitionInput): Prisma.InputJsonValue | null {
+  const { conditionOp: op, conditionPath, conditionValue } = data;
+  if (op === "always") return null;
+
+  const path = (conditionPath ?? "").trim();
+  if (!path) {
+    throw new CommandError("Informe o campo avaliado pela condição.", {
+      errors: ['Toda condição (exceto "sempre") precisa de um campo — ex.: "project.contractValue".'],
+    });
+  }
+
+  if (op === "isEmpty" || op === "isNotEmpty") return { op, path };
+
+  if (op === "in" || op === "nin") {
+    const value = (conditionValue ?? "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    if (value.length === 0) {
+      throw new CommandError("Informe ao menos um valor para a lista.", {
+        errors: ["Separe os valores por vírgula."],
+      });
+    }
+    return { op, path, value };
+  }
+
+  const raw = (conditionValue ?? "").trim();
+  if (!raw) {
+    throw new CommandError("Informe o valor de comparação da condição.", {
+      errors: ["O valor não pode ficar em branco."],
+    });
+  }
+  const value: string | number = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw;
+  return { op, path, value };
+}
+
+async function validateTransitionTargets(
+  tx: Tx,
+  versionId: string,
+  fromStageId: string,
+  data: TransitionInput,
+) {
+  const target = await tx.workflowStage.findFirst({
+    where: { id: data.toStageId, versionId },
+    select: { id: true },
+  });
+  if (!target) {
+    throw new CommandError("Etapa de destino inválida.", {
+      errors: ["A etapa de destino não pertence a este rascunho."],
+    });
+  }
+
+  if (data.actionId) {
+    const action = await tx.stageAction.findFirst({
+      where: { id: data.actionId, stageId: fromStageId },
+      select: { id: true },
+    });
+    if (!action) {
+      throw new CommandError("Ação inválida.", {
+        errors: ["A ação selecionada não pertence a esta etapa."],
+      });
+    }
+  }
+}
+
+export async function createTransition(actor: SessionContext, input: { stageId: string; data: unknown }) {
+  requireManage(actor);
+  const data = transitionSchema.parse(input.data);
+
+  return prisma.$transaction(async (tx) => {
+    const { stage, version } = await getStageInDraft(tx, actor.organizationId, input.stageId);
+    await validateTransitionTargets(tx, version.id, stage.id, data);
+    const condition = buildCondition(data);
+
+    const maxOrder = await tx.workflowTransition.aggregate({
+      where: { fromStageId: stage.id },
+      _max: { order: true },
+    });
+    const order = (maxOrder._max.order ?? -1) + 1;
+
+    const transition = await tx.workflowTransition.create({
+      data: {
+        organizationId: actor.organizationId,
+        versionId: version.id,
+        fromStageId: stage.id,
+        toStageId: data.toStageId,
+        actionId: data.actionId || null,
+        condition: condition ?? undefined,
+        order,
+      },
+    });
+
+    const toStage = await tx.workflowStage.findUniqueOrThrow({
+      where: { id: data.toStageId },
+      select: { name: true },
+    });
+    await writeAudit(tx, {
+      organizationId: actor.organizationId,
+      actorId: actor.userId,
+      action: "workflow.transition.created",
+      entityType: "WorkflowTransition",
+      entityId: transition.id,
+      summary: `Transição "${stage.name}" → "${toStage.name}" criada.`,
+      after: transition,
+    });
+
+    return transition;
+  });
+}
+
+export async function updateTransition(actor: SessionContext, input: { transitionId: string; data: unknown }) {
+  requireManage(actor);
+  const data = transitionSchema.parse(input.data);
+
+  return prisma.$transaction(async (tx) => {
+    const transition = await tx.workflowTransition.findFirst({
+      where: { id: input.transitionId, organizationId: actor.organizationId },
+    });
+    if (!transition) throw new CommandError("Transição não encontrada.", { errors: ["Transição inexistente."] });
+    const { stage, version } = await getStageInDraft(tx, actor.organizationId, transition.fromStageId);
+    await validateTransitionTargets(tx, version.id, stage.id, data);
+    const condition = buildCondition(data);
+
+    const updated = await tx.workflowTransition.update({
+      where: { id: transition.id },
+      data: {
+        toStageId: data.toStageId,
+        actionId: data.actionId || null,
+        condition: condition === null ? Prisma.JsonNull : condition,
+      },
+    });
+
+    const toStage = await tx.workflowStage.findUniqueOrThrow({
+      where: { id: data.toStageId },
+      select: { name: true },
+    });
+    await writeAudit(tx, {
+      organizationId: actor.organizationId,
+      actorId: actor.userId,
+      action: "workflow.transition.updated",
+      entityType: "WorkflowTransition",
+      entityId: transition.id,
+      summary: `Transição "${stage.name}" → "${toStage.name}" atualizada.`,
+      before: transition,
+      after: updated,
+    });
+
+    return updated;
+  });
+}
+
+export async function deleteTransition(actor: SessionContext, input: { transitionId: string }) {
+  requireManage(actor);
+
+  return prisma.$transaction(async (tx) => {
+    const transition = await tx.workflowTransition.findFirst({
+      where: { id: input.transitionId, organizationId: actor.organizationId },
+    });
+    if (!transition) throw new CommandError("Transição não encontrada.", { errors: ["Transição inexistente."] });
+    const { stage } = await getStageInDraft(tx, actor.organizationId, transition.fromStageId);
+
+    await tx.workflowTransition.delete({ where: { id: transition.id } });
+
+    const remaining = await tx.workflowTransition.findMany({
+      where: { fromStageId: stage.id },
+      orderBy: { order: "asc" },
+    });
+    for (const [index, t] of remaining.entries()) {
+      if (t.order !== index) await tx.workflowTransition.update({ where: { id: t.id }, data: { order: index } });
+    }
+
+    await writeAudit(tx, {
+      organizationId: actor.organizationId,
+      actorId: actor.userId,
+      action: "workflow.transition.deleted",
+      entityType: "WorkflowTransition",
+      entityId: transition.id,
+      summary: `Transição removida da etapa "${stage.name}".`,
+      before: transition,
+    });
+  });
+}
+
+export async function moveTransition(
+  actor: SessionContext,
+  input: { transitionId: string; direction: "up" | "down" },
+) {
+  requireManage(actor);
+
+  return prisma.$transaction(async (tx) => {
+    const transition = await tx.workflowTransition.findFirst({
+      where: { id: input.transitionId, organizationId: actor.organizationId },
+    });
+    if (!transition) throw new CommandError("Transição não encontrada.", { errors: ["Transição inexistente."] });
+    await getStageInDraft(tx, actor.organizationId, transition.fromStageId);
+
+    const transitions = await tx.workflowTransition.findMany({
+      where: { fromStageId: transition.fromStageId },
+      orderBy: { order: "asc" },
+    });
+    const index = transitions.findIndex((t) => t.id === transition.id);
+    const swapIndex = input.direction === "up" ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= transitions.length) return;
+
+    const other = transitions[swapIndex];
+    await tx.workflowTransition.update({ where: { id: transition.id }, data: { order: other.order } });
+    await tx.workflowTransition.update({ where: { id: other.id }, data: { order: transition.order } });
   });
 }

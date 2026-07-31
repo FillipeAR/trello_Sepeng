@@ -14,14 +14,18 @@ import {
   deleteField,
   deleteStage,
   discardDraft,
+  createTransition,
+  deleteTransition,
   moveAction,
   moveField,
   moveStage,
+  moveTransition,
   parseFieldOptions,
   publishVersion,
   updateAction,
   updateField,
   updateStage,
+  updateTransition,
   updateVersionNotes,
 } from "@/modules/workflow/commands";
 
@@ -109,6 +113,27 @@ function actionDataFromForm(formData: FormData) {
     requiredPermission: nullableStr(formData, "requiredPermission"),
     requiresComment: bool(formData, "requiresComment"),
     variant: (str(formData, "variant") || "primary") as "primary" | "secondary" | "danger",
+  };
+}
+
+function transitionDataFromForm(formData: FormData) {
+  return {
+    toStageId: str(formData, "toStageId"),
+    actionId: nullableStr(formData, "actionId"),
+    conditionOp: (str(formData, "conditionOp") || "always") as
+      | "always"
+      | "eq"
+      | "neq"
+      | "gt"
+      | "gte"
+      | "lt"
+      | "lte"
+      | "in"
+      | "nin"
+      | "isEmpty"
+      | "isNotEmpty",
+    conditionPath: nullableStr(formData, "conditionPath"),
+    conditionValue: nullableStr(formData, "conditionValue"),
   };
 }
 
@@ -314,6 +339,61 @@ export async function moveActionAction(_prev: ActionState, formData: FormData): 
   try {
     await moveAction(actor, {
       actionId: str(formData, "actionId"),
+      direction: str(formData, "direction") as "up" | "down",
+    });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/admin/fluxos/${versionId}/editar`);
+  return { success: true };
+}
+
+// --- Transições ----------------------------------------------------------------
+
+export async function createTransitionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const versionId = str(formData, "versionId");
+  const stageId = str(formData, "stageId");
+  try {
+    await createTransition(actor, { stageId, data: transitionDataFromForm(formData) });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/admin/fluxos/${versionId}/editar`);
+  return { success: true };
+}
+
+export async function updateTransitionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const versionId = str(formData, "versionId");
+  const transitionId = str(formData, "transitionId");
+  try {
+    await updateTransition(actor, { transitionId, data: transitionDataFromForm(formData) });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/admin/fluxos/${versionId}/editar`);
+  return { success: true };
+}
+
+export async function deleteTransitionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const versionId = str(formData, "versionId");
+  try {
+    await deleteTransition(actor, { transitionId: str(formData, "transitionId") });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/admin/fluxos/${versionId}/editar`);
+  return { success: true };
+}
+
+export async function moveTransitionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const versionId = str(formData, "versionId");
+  try {
+    await moveTransition(actor, {
+      transitionId: str(formData, "transitionId"),
       direction: str(formData, "direction") as "up" | "down",
     });
   } catch (error) {

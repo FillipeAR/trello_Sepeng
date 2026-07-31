@@ -266,3 +266,94 @@ export function ActionFieldSet({
     </div>
   );
 }
+
+// --- Transição -------------------------------------------------------------
+
+const CONDITION_OPS: [string, string][] = [
+  ["always", "Sempre (sem condição)"],
+  ["eq", "Igual a"],
+  ["neq", "Diferente de"],
+  ["gt", "Maior que"],
+  ["gte", "Maior ou igual a"],
+  ["lt", "Menor que"],
+  ["lte", "Menor ou igual a"],
+  ["in", "Está na lista"],
+  ["nin", "Não está na lista"],
+  ["isEmpty", "Está vazio"],
+  ["isNotEmpty", "Não está vazio"],
+];
+
+interface TransitionDefaults {
+  toStageId?: string;
+  actionId?: string | null;
+  conditionOp?: string;
+  conditionPath?: string | null;
+  conditionValue?: string | null;
+}
+
+export function TransitionFieldSet({
+  defaults,
+  stageOptions,
+  actionOptions,
+}: {
+  defaults?: TransitionDefaults;
+  stageOptions: { id: string; name: string }[];
+  actionOptions: { id: string; label: string }[];
+}) {
+  const [op, setOp] = useState(defaults?.conditionOp ?? "always");
+  const needsPath = op !== "always";
+  const needsValue = op !== "always" && op !== "isEmpty" && op !== "isNotEmpty";
+
+  return (
+    <div className="grid flex-1 gap-2 sm:grid-cols-3">
+      <select name="toStageId" required defaultValue={defaults?.toStageId ?? ""} className="input">
+        <option value="" disabled>
+          Etapa de destino
+        </option>
+        {stageOptions.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <select name="actionId" defaultValue={defaults?.actionId ?? ""} className="input">
+        <option value="">Qualquer ação desta etapa</option>
+        {actionOptions.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.label}
+          </option>
+        ))}
+      </select>
+      <select name="conditionOp" value={op} onChange={(e) => setOp(e.target.value)} className="input">
+        {CONDITION_OPS.map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+
+      {needsPath ? (
+        <div className="sm:col-span-3 grid gap-2 sm:grid-cols-2">
+          <div>
+            <input
+              name="conditionPath"
+              defaultValue={defaults?.conditionPath ?? ""}
+              placeholder='Campo — ex.: "project.contractValue"'
+              className="input"
+            />
+          </div>
+          {needsValue ? (
+            <div>
+              <input
+                name="conditionValue"
+                defaultValue={defaults?.conditionValue ?? ""}
+                placeholder={op === "in" || op === "nin" ? "Valores separados por vírgula" : "Valor de comparação"}
+                className="input"
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
