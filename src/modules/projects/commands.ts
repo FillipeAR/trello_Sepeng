@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { canTransition, computeDueDate, getInitialStage } from "@/core/workflow/engine";
+import { canTransition, computeDueDate, getInitialStage, shouldJoin } from "@/core/workflow/engine";
+import type { StageDef, StageInstanceStatus } from "@/core/workflow/types";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { hasPermission } from "@/core/rbac/can";
 import type { SessionContext } from "@/server/actor";
@@ -140,6 +141,12 @@ export async function createProject(actor: SessionContext, input: CreateProjectI
 
 export interface ExecuteActionInput {
   projectId: string;
+  /**
+   * Qual etapa está sendo concluída. Obrigatório porque a obra pode ter mais
+   * de uma etapa ativa ao mesmo tempo (ramos paralelos) — não existe mais um
+   * "currentStageId" único e implícito o suficiente para inferir sozinho.
+   */
+  stageId: string;
   actionKey: string;
   fieldValues: Record<string, unknown>;
   comment?: string | null;
@@ -148,6 +155,15 @@ export interface ExecuteActionInput {
 /**
  * Command handler central: autoriza → valida → aplica → audita → emite evento.
  * Toda mudança de etapa do sistema passa por aqui, sem exceção.
+ *
+ * Etapas paralelas (`mode: "PARALLEL"`): ao avançar, abre um `StageInstance`
+ * por ramo válido, todos com o mesmo `forkId`. Cada ramo evolui de forma
+ * independente; ao concluir um ramo, só abre a etapa de convergência quando o
+ * `joinPolicy` dela permitir — `ALL` espera que todo irmão (mesmo `forkId`)
+ * também esteja concluído, `ANY` libera no primeiro e marca os irmãos ainda
+ * abertos como `SKIPPED` (supersedidos). A posição "atual" da obra nunca é
+ * mantida manualmente por caso — é sempre recalculada a partir de quais
+ * `StageInstance` seguem ativas depois da escrita.
  */
 export async function executeStageAction(
   actor: SessionContext,
@@ -163,7 +179,7 @@ export async function executeStageAction(
   }
 
   const instance = project.workflow;
-  if (!instance.currentStageId) {
+  if (instance.completedAt) {
     throw new CommandError("Esta obra já foi encerrada.", {
       errors: ["O fluxo desta obra não possui etapa ativa."],
     });
@@ -173,7 +189,7 @@ export async function executeStageAction(
 
   const decision = canTransition({
     snapshot,
-    currentStageId: instance.currentStageId,
+    currentStageId: input.stageId,
     actionKey: input.actionKey,
     actor,
     fieldValues: input.fieldValues,
@@ -193,19 +209,26 @@ export async function executeStageAction(
     });
   }
 
-  const currentStage = snapshot.stages.find((s) => s.id === instance.currentStageId)!;
+  const currentStage = snapshot.stages.find((s) => s.id === input.stageId)!;
   const action = decision.action;
-  const targetStage = decision.targetStage ?? null;
+  const targetStages = decision.targetStages;
 
   return prisma.$transaction(async (tx) => {
-    const currentInstance = await tx.stageInstance.findFirstOrThrow({
+    const currentInstance = await tx.stageInstance.findFirst({
       where: {
         projectId: project.id,
+        workflowInstanceId: instance.id,
         stageId: currentStage.id,
         status: { in: ["PENDING", "IN_PROGRESS"] },
       },
       orderBy: { enteredAt: "desc" },
     });
+
+    if (!currentInstance) {
+      throw new CommandError("Esta etapa não está mais ativa nesta obra.", {
+        errors: ["A etapa já foi concluída (por você ou por um ramo paralelo) ou nunca chegou a abrir."],
+      });
+    }
 
     // 1. Persiste o que foi preenchido na etapa.
     for (const field of currentStage.fields) {
@@ -239,37 +262,100 @@ export async function executeStageAction(
       },
     });
 
-    // 3. Abre a próxima etapa (ou encerra o fluxo).
-    if (targetStage) {
+    // 3. Decide o que abrir a seguir.
+    const openedStages: StageDef[] = [];
+
+    const openStageInstance = async (target: StageDef, forkId: string | null) => {
       await tx.stageInstance.create({
         data: {
           organizationId: actor.organizationId,
           projectId: project.id,
           workflowInstanceId: instance.id,
-          stageId: targetStage.id,
+          stageId: target.id,
+          forkId,
           status: "IN_PROGRESS",
           enteredAt: now,
-          dueAt: computeDueDate(targetStage, now),
+          dueAt: computeDueDate(target, now),
         },
       });
+      openedStages.push(target);
+    };
+
+    if (action.kind === "ADVANCE" && targetStages.length > 1) {
+      // Bifurcação: abre um StageInstance por ramo, todos com o mesmo forkId.
+      const forkId = crypto.randomUUID();
+      for (const target of targetStages) {
+        await openStageInstance(target, forkId);
+      }
+    } else if (targetStages.length === 1) {
+      const target = targetStages[0];
+
+      if (action.kind === "ADVANCE" && currentInstance.forkId) {
+        // Este ramo terminou dentro de uma bifurcação — só abre a etapa de
+        // convergência se o joinPolicy dela já estiver satisfeito.
+        const siblings = await tx.stageInstance.findMany({
+          where: {
+            workflowInstanceId: instance.id,
+            forkId: currentInstance.forkId,
+            id: { not: currentInstance.id },
+          },
+        });
+        const siblingStatuses: StageInstanceStatus[] = [...siblings.map((s) => s.status), "COMPLETED"];
+
+        const alreadyOpen = await tx.stageInstance.findFirst({
+          where: {
+            workflowInstanceId: instance.id,
+            stageId: target.id,
+            status: { in: ["PENDING", "IN_PROGRESS"] },
+          },
+        });
+
+        if (!alreadyOpen && shouldJoin(target.joinPolicy, siblingStatuses)) {
+          await openStageInstance(target, null);
+
+          if (target.joinPolicy === "ANY") {
+            const stillOpen = siblings.filter((s) => s.status === "PENDING" || s.status === "IN_PROGRESS");
+            for (const sibling of stillOpen) {
+              await tx.stageInstance.update({
+                where: { id: sibling.id },
+                data: { status: "SKIPPED", completedAt: now },
+              });
+            }
+          }
+        }
+        // Senão: ALL ainda esperando outro(s) ramo(s), ou um irmão já abriu
+        // (ANY já disparou antes) — não há nada a abrir agora.
+      } else {
+        // Fluxo sequencial normal, sem bifurcação envolvida.
+        await openStageInstance(target, null);
+      }
     }
+    // targetStages vazio (FINISH, ou etapa final sem destino): nada a abrir.
+
+    // 4. Recalcula a posição "atual" da obra a partir das etapas realmente
+    // ativas — nunca a partir do que cada ramo dessa função "acha" que fez.
+    const activeInstances = await tx.stageInstance.findMany({
+      where: { workflowInstanceId: instance.id, status: { in: ["PENDING", "IN_PROGRESS"] } },
+      select: { stageId: true },
+    });
+    const finished = activeInstances.length === 0;
 
     await tx.projectWorkflowInstance.update({
       where: { id: instance.id },
       data: {
-        currentStageId: targetStage?.id ?? null,
-        completedAt: targetStage ? null : now,
+        currentStageId: activeInstances.length === 1 ? activeInstances[0].stageId : null,
+        completedAt: finished ? now : null,
       },
     });
 
-    if (!targetStage) {
+    if (finished) {
       await tx.project.update({
         where: { id: project.id },
         data: { status: "COMPLETED", actualEndDate: now, progressPercent: 100 },
       });
     }
 
-    // 4. A justificativa vira comentário na etapa — histórico de conversas.
+    // 5. A justificativa vira comentário na etapa — histórico de conversas.
     if (input.comment?.trim()) {
       await tx.comment.create({
         data: {
@@ -282,56 +368,93 @@ export async function executeStageAction(
       });
     }
 
-    // 5. Auditoria.
+    // 6. Auditoria.
+    const afterSummary =
+      openedStages.length > 0
+        ? openedStages.map((s) => s.name).join(" + ")
+        : finished
+          ? "fluxo encerrado"
+          : "aguardando ramo(s) irmão(s)";
     await writeAudit(tx, {
       organizationId: actor.organizationId,
       actorId: actor.userId,
       action: `stage.${action.kind.toLowerCase()}`,
       entityType: "Project",
       entityId: project.id,
-      summary: targetStage
-        ? `${currentStage.name} → ${targetStage.name} (${action.label})`
-        : `${currentStage.name} → fluxo encerrado (${action.label})`,
+      summary: `${currentStage.name} → ${afterSummary} (${action.label})`,
       before: {
         stage: currentStage.name,
         displayStatus: currentStage.displayStatus,
         stageInstanceStatus: currentInstance.status,
       },
       after: {
-        stage: targetStage?.name ?? null,
-        displayStatus: targetStage?.displayStatus ?? "Fluxo encerrado",
+        stages: openedStages.map((s) => s.name),
+        displayStatus: openedStages[0]?.displayStatus ?? (finished ? "Fluxo encerrado" : "Aguardando ramo(s) irmão(s)"),
         stageInstanceStatus: closed.status,
       },
     });
 
-    // 6. Evento de domínio — notificações saem daqui, fora da transação.
-    const eventType =
-      action.kind === "RETURN"
-        ? DOMAIN_EVENTS.STAGE_RETURNED
-        : action.kind === "REJECT"
-          ? DOMAIN_EVENTS.PROJECT_REJECTED
-          : targetStage
-            ? DOMAIN_EVENTS.STAGE_ENTERED
-            : DOMAIN_EVENTS.PROJECT_FINISHED;
+    // 7. Eventos de domínio — notificações saem daqui, fora da transação.
+    if (action.kind === "RETURN" || action.kind === "REJECT") {
+      const eventType = action.kind === "RETURN" ? DOMAIN_EVENTS.STAGE_RETURNED : DOMAIN_EVENTS.PROJECT_REJECTED;
+      const target = openedStages[0] ?? null;
+      await enqueueEvent(tx, {
+        organizationId: actor.organizationId,
+        type: eventType,
+        payload: {
+          projectId: project.id,
+          projectName: project.name,
+          projectCode: project.code,
+          fromStageName: currentStage.name,
+          stageId: target?.id ?? null,
+          stageName: target?.name ?? null,
+          departmentId: target?.departmentId ?? null,
+          displayStatus: target?.displayStatus ?? null,
+          actorName: actor.userName,
+        },
+        idempotencyKey: `${eventType}:${currentInstance.id}:${action.key}`,
+      });
+    } else {
+      for (const target of openedStages) {
+        await enqueueEvent(tx, {
+          organizationId: actor.organizationId,
+          type: DOMAIN_EVENTS.STAGE_ENTERED,
+          payload: {
+            projectId: project.id,
+            projectName: project.name,
+            projectCode: project.code,
+            fromStageName: currentStage.name,
+            stageId: target.id,
+            stageName: target.name,
+            departmentId: target.departmentId,
+            displayStatus: target.displayStatus,
+            actorName: actor.userName,
+          },
+          idempotencyKey: `${DOMAIN_EVENTS.STAGE_ENTERED}:${currentInstance.id}:${action.key}:${target.id}`,
+        });
+      }
 
-    await enqueueEvent(tx, {
-      organizationId: actor.organizationId,
-      type: eventType,
-      payload: {
-        projectId: project.id,
-        projectName: project.name,
-        projectCode: project.code,
-        fromStageName: currentStage.name,
-        stageId: targetStage?.id ?? null,
-        stageName: targetStage?.name ?? null,
-        departmentId: targetStage?.departmentId ?? null,
-        displayStatus: targetStage?.displayStatus ?? "Obra Finalizada",
-        actorName: actor.userName,
-      },
-      idempotencyKey: `${eventType}:${currentInstance.id}:${action.key}`,
-    });
+      if (finished) {
+        await enqueueEvent(tx, {
+          organizationId: actor.organizationId,
+          type: DOMAIN_EVENTS.PROJECT_FINISHED,
+          payload: {
+            projectId: project.id,
+            projectName: project.name,
+            projectCode: project.code,
+            fromStageName: currentStage.name,
+            stageId: null,
+            stageName: null,
+            departmentId: null,
+            displayStatus: "Obra Finalizada",
+            actorName: actor.userName,
+          },
+          idempotencyKey: `${DOMAIN_EVENTS.PROJECT_FINISHED}:${instance.id}`,
+        });
+      }
+    }
 
-    return { projectId: project.id, targetStage };
+    return { projectId: project.id, targetStages: openedStages };
   });
 }
 

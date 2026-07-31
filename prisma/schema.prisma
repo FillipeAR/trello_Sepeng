@@ -448,6 +448,10 @@ model StageInstance {
   workflowInstanceId String
   stageId            String
   status             StageInstanceStatus @default(PENDING)
+  /// Agrupa os ramos abertos juntos quando uma etapa PARALLEL bifurca. Nulo
+  /// fora de um trecho paralelo do fluxo. Ramos com o mesmo forkId são
+  /// "irmãos" — usado para aplicar o joinPolicy da etapa de convergência.
+  forkId             String?
   enteredAt          DateTime            @default(now())
   dueAt              DateTime?
   completedAt        DateTime?
@@ -466,6 +470,7 @@ model StageInstance {
   @@index([organizationId, status])
   @@index([stageId, enteredAt])
   @@index([projectId, enteredAt])
+  @@index([workflowInstanceId, forkId])
   @@map("stage_instances")
 }
 

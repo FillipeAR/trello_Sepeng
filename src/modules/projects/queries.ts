@@ -38,6 +38,12 @@ export interface ProjectListFilters {
   onlyLate?: boolean;
 }
 
+/**
+ * Lista obras com a(s) etapa(s) ativa(s) no momento — uma obra em ramos
+ * paralelos tem mais de uma. Os campos singulares (`stageName`,
+ * `displayStatus`, etc.) refletem a etapa ativa mais antiga (a "principal"
+ * para exibição em tabela); `activeStages` traz todas.
+ */
 export async function listProjects(actor: SessionContext, filters: ProjectListFilters = {}) {
   const where = {
     ...readScopeWhere(actor),
@@ -58,12 +64,11 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
     orderBy: { createdAt: "desc" },
     take: 100,
     include: {
-      workflow: { include: { currentStage: { include: { department: true } } } },
       team: { include: { user: { select: { id: true, name: true } } } },
       stageInstances: {
-        where: { status: "IN_PROGRESS" },
-        orderBy: { enteredAt: "desc" },
-        take: 1,
+        where: { status: { in: ["PENDING", "IN_PROGRESS"] } },
+        orderBy: { enteredAt: "asc" },
+        include: { stage: { include: { department: true } } },
       },
     },
   });
@@ -71,10 +76,13 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
   const now = new Date();
 
   return projects
-    .filter((p) => (filters.stageKey ? p.workflow?.currentStage?.key === filters.stageKey : true))
+    .filter((p) =>
+      filters.stageKey ? p.stageInstances.some((si) => si.stage.key === filters.stageKey) : true,
+    )
     .map((p) => {
-      const active = p.stageInstances[0];
-      const late = isSlaBreached(active?.dueAt ?? null, now) || p.plannedEndDate < now;
+      const active = p.stageInstances;
+      const primary = active[0] ?? null;
+      const late = active.some((si) => isSlaBreached(si.dueAt, now)) || p.plannedEndDate < now;
       return {
         id: p.id,
         code: p.code,
@@ -85,12 +93,14 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
         plannedEndDate: p.plannedEndDate,
         progressPercent: p.progressPercent,
         status: p.status,
-        stageName: p.workflow?.currentStage?.name ?? "—",
-        stageKey: p.workflow?.currentStage?.key ?? null,
-        displayStatus: p.workflow?.currentStage?.displayStatus ?? "Fluxo encerrado",
-        stageColor: p.workflow?.currentStage?.color ?? "#64748b",
-        departmentName: p.workflow?.currentStage?.department?.name ?? null,
-        dueAt: active?.dueAt ?? null,
+        stageName: primary?.stage.name ?? "—",
+        stageKey: primary?.stage.key ?? null,
+        displayStatus: primary?.stage.displayStatus ?? "Fluxo encerrado",
+        stageColor: primary?.stage.color ?? "#64748b",
+        departmentName: primary?.stage.department?.name ?? null,
+        dueAt: primary?.dueAt ?? null,
+        activeStageCount: active.length,
+        activeStageKeys: active.map((si) => si.stage.key),
         isLate: p.status === "ACTIVE" && late,
         manager: p.team.find((t) => t.role === "MANAGER")?.user.name ?? null,
       };
@@ -100,7 +110,7 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
 
 export interface TimelineStep {
   stage: StageDef;
-  state: "COMPLETED" | "CURRENT" | "PENDING" | "RETURNED";
+  state: "COMPLETED" | "CURRENT" | "PENDING" | "RETURNED" | "SKIPPED";
   enteredAt: Date | null;
   completedAt: Date | null;
   dueAt: Date | null;
@@ -109,13 +119,18 @@ export interface TimelineStep {
   values: { label: string; value: unknown; type: string }[];
 }
 
-/** Obra completa: dados, esteira, ações disponíveis e histórico. */
+export interface ActiveStage {
+  stage: StageDef;
+  actions: AvailableAction[];
+}
+
+/** Obra completa: dados, esteira, ações disponíveis (por etapa ativa) e histórico. */
 export async function getProjectDetail(actor: SessionContext, projectId: string) {
   const project = await prisma.project.findFirst({
     where: { id: projectId, organizationId: actor.organizationId, deletedAt: null },
     include: {
       createdBy: { select: { name: true } },
-      workflow: { include: { currentStage: true } },
+      workflow: true,
       team: { include: { user: { select: { id: true, name: true } } } },
       updates: {
         orderBy: { occurredAt: "desc" },
@@ -142,10 +157,12 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
     if (stage?.departmentId) visitedDepartmentIds.push(stage.departmentId);
   }
 
-  const currentStage = snapshot.stages.find((s) => s.id === project.workflow!.currentStageId);
+  const openInstances = project.stageInstances.filter(
+    (si) => si.status === "PENDING" || si.status === "IN_PROGRESS",
+  );
+  const activeStageIds = openInstances.map((si) => si.stageId);
 
   const allowed = canReadProject(actor, {
-    currentStageDepartmentId: currentStage?.departmentId ?? null,
     visitedDepartmentIds,
     assignedUserIds: project.team.map((t) => t.userId),
   });
@@ -158,7 +175,7 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
   const timeline: TimelineStep[] = ordered.map((stage) => {
     const instances = project.stageInstances.filter((si) => si.stageId === stage.id);
     const last = instances[instances.length - 1];
-    const isCurrent = project.workflow!.currentStageId === stage.id;
+    const isCurrent = activeStageIds.includes(stage.id);
 
     const state: TimelineStep["state"] = isCurrent
       ? "CURRENT"
@@ -166,7 +183,9 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
         ? "COMPLETED"
         : last?.status === "RETURNED"
           ? "RETURNED"
-          : "PENDING";
+          : last?.status === "SKIPPED"
+            ? "SKIPPED"
+            : "PENDING";
 
     return {
       stage,
@@ -185,9 +204,11 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
     };
   });
 
-  const actions: AvailableAction[] = currentStage
-    ? getAvailableActions(snapshot, currentStage.id, actor)
-    : [];
+  // Uma etapa por ramo ativo — sequencial tem no máximo uma; paralelo, várias.
+  const activeStages: ActiveStage[] = activeStageIds
+    .map((id) => snapshot.stages.find((s) => s.id === id))
+    .filter((stage): stage is StageDef => Boolean(stage))
+    .map((stage) => ({ stage, actions: getAvailableActions(snapshot, stage.id, actor) }));
 
   return {
     project: {
@@ -206,10 +227,9 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
       createdAt: project.createdAt,
     },
     workflowVersion: snapshot.version,
-    currentStage,
+    activeStages,
     timeline,
-    actions,
-    progress: workflowProgress(snapshot, project.workflow.currentStageId),
+    progress: workflowProgress(snapshot, activeStageIds),
     team: project.team.map((t) => ({ id: t.userId, name: t.user.name, role: t.role })),
     updates: project.updates.map((u) => ({
       id: u.id,
@@ -222,7 +242,7 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
   };
 }
 
-/** Fila pessoal: obras paradas na etapa do departamento do usuário. */
+/** Fila pessoal: obras com alguma etapa ativa no departamento do usuário. */
 export async function listMyQueue(actor: SessionContext) {
   const projects = await listProjects(actor, { status: "ACTIVE" });
   if (!actor.departmentId) return [];
@@ -233,7 +253,7 @@ export async function listMyQueue(actor: SessionContext) {
   });
   const myStageKeys = new Set(stageDepartments.map((s) => s.key));
 
-  return projects.filter((p) => p.stageKey && myStageKeys.has(p.stageKey));
+  return projects.filter((p) => p.activeStageKeys.some((key) => myStageKeys.has(key)));
 }
 
 export async function getProjectAuditTrail(actor: SessionContext, projectId: string) {

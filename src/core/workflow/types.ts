@@ -20,6 +20,7 @@ export type FieldType =
 export type ActionKind = "ADVANCE" | "RETURN" | "REJECT" | "FINISH";
 export type StageMode = "SEQUENTIAL" | "PARALLEL";
 export type JoinPolicy = "ALL" | "ANY";
+export type StageInstanceStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "SKIPPED" | "RETURNED";
 
 export interface FieldOption {
   value: string;
@@ -117,7 +118,11 @@ export interface TransitionDecision {
   errors: string[];
   fieldErrors: FieldError[];
   action?: StageActionDef;
-  targetStage?: StageDef | null;
+  /**
+   * Etapas de destino. Mais de uma quando a etapa atual bifurca (`mode:
+   * "PARALLEL"`); vazio quando a ação encerra o fluxo (`kind: "FINISH"`).
+   */
+  targetStages: StageDef[];
 }
 
 export interface AvailableAction extends StageActionDef {

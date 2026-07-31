@@ -82,10 +82,11 @@ status está escrito em código.
   → [`src/core/workflow/conditions.ts`](src/core/workflow/conditions.ts)
 - **Transação atômica**: fecha a `StageInstance`, abre a próxima, grava auditoria e
   enfileira o evento — tudo ou nada.
-- **Etapas paralelas** já estão modeladas (`mode`, `joinPolicy`) para quando RH, Segurança
-  e Financeiro rodarem simultaneamente (V1).
+- **Etapas paralelas**: uma etapa `mode: PARALLEL` bifurca em vários `StageInstance` (mesmo
+  `forkId`) ao avançar; a etapa de convergência libera conforme seu `joinPolicy` — `ALL`
+  espera todos os ramos, `ANY` libera no primeiro e dispensa (`SKIPPED`) os demais.
 
-→ [`src/core/workflow/engine.ts`](src/core/workflow/engine.ts) · 46 testes em `*.test.ts`
+→ [`src/core/workflow/engine.ts`](src/core/workflow/engine.ts) · testes em `*.test.ts`
 
 ---
 
@@ -189,10 +190,15 @@ tela (`src/modules/workflow/commands.ts`), com rascunho (`DRAFT`) editável e pu
 como nova versão imutável. Reordenação por botões subir/descer, não arrastar-e-soltar —
 mesma capacidade, sem dependência de drag-and-drop.
 
+✅ Etapas paralelas — bifurcação e convergência (`ALL`/`ANY`) no engine e no command
+handler, com múltiplas `StageInstance` ativas simultaneamente por obra. Configurar uma
+bifurcação ainda exige script (o editor visual não cria `WorkflowTransition` pela tela) —
+ver `scripts/demo-etapa-paralela.ts`.
+
 Falta:
-etapas paralelas · escalonamento automático por SLA vencido · upload real de anexos
-(Vercel Blob) · comentários com @menção · registro de progresso com fotos · relatório final
-de encerramento · exportação CSV/PDF.
+editor de transições no admin de fluxos · escalonamento automático por SLA vencido ·
+upload real de anexos (Vercel Blob) · comentários com @menção · registro de progresso com
+fotos · relatório final de encerramento · exportação CSV/PDF.
 
 **V2 — escala e integração**
 Worker de outbox em Vercel Queues com e-mail (Resend) e WhatsApp (Meta Cloud API) ·

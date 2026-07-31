@@ -12,12 +12,21 @@ export function StageTimeline({
   steps: TimelineStep[];
   progress: number;
 }) {
+  const currentCount = steps.filter((s) => s.state === "CURRENT").length;
+
   return (
     <div className="card p-6">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Esteira da obra</h2>
         <span className="text-xs text-muted">{progress}% do fluxo percorrido</span>
       </div>
+
+      {currentCount > 1 ? (
+        <p className="mb-4 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+          Esta obra está em {currentCount} etapas ao mesmo tempo — ramos paralelos em
+          andamento. Todos precisam avançar antes da próxima etapa liberar.
+        </p>
+      ) : null}
 
       <div className="mb-8 h-2 overflow-hidden rounded-full bg-surface-muted">
         <div
@@ -38,7 +47,9 @@ export function StageTimeline({
                   : "bg-primary border-primary animate-pulse"
                 : step.state === "RETURNED"
                   ? "bg-danger border-danger"
-                  : "bg-surface border-border";
+                  : step.state === "SKIPPED"
+                    ? "bg-surface-muted border-border"
+                    : "bg-surface border-border";
 
           return (
             <li key={step.stage.id} className="relative flex gap-4 pb-6 last:pb-0">
@@ -79,14 +90,21 @@ export function StageTimeline({
                         devolvida
                       </span>
                     ) : null}
+                    {step.state === "SKIPPED" ? (
+                      <span className="ml-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+                        dispensada — ramo paralelo já resolvido
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="text-xs text-muted">
                     {step.state === "PENDING"
                       ? "Aguardando"
-                      : step.completedAt
-                        ? `Concluída em ${formatDateTime(step.completedAt)}`
-                        : `Desde ${formatDateTime(step.enteredAt)}`}
+                      : step.state === "SKIPPED"
+                        ? "Não chegou a ser necessária"
+                        : step.completedAt
+                          ? `Concluída em ${formatDateTime(step.completedAt)}`
+                          : `Desde ${formatDateTime(step.enteredAt)}`}
                   </div>
                 </div>
 

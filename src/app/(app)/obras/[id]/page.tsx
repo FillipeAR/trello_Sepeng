@@ -14,7 +14,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
   const detail = await getProjectDetail(actor, id);
   if (!detail) notFound();
 
-  const { project, currentStage, timeline, actions, progress, updates } = detail;
+  const { project, activeStages, timeline, progress, updates } = detail;
 
   const users = await prisma.membership.findMany({
     where: { organizationId: actor.organizationId, isActive: true },
@@ -45,9 +45,17 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-4">
           <div className="text-xs text-muted">Status atual</div>
-          <div className="mt-1 font-semibold" style={{ color: currentStage?.color }}>
-            {currentStage?.displayStatus ?? "Obra Finalizada"}
-          </div>
+          {activeStages.length > 0 ? (
+            <div className="mt-1 space-y-0.5">
+              {activeStages.map(({ stage }) => (
+                <div key={stage.id} className="font-semibold" style={{ color: stage.color }}>
+                  {stage.displayStatus}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-1 font-semibold">Obra Finalizada</div>
+          )}
         </div>
         <div className="card p-4">
           <div className="text-xs text-muted">Valor do contrato</div>
@@ -102,13 +110,16 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className="space-y-6">
-          {currentStage ? (
-            <DynamicStageForm
-              projectId={project.id}
-              stage={currentStage}
-              actions={actions}
-              users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
-            />
+          {activeStages.length > 0 ? (
+            activeStages.map(({ stage, actions }) => (
+              <DynamicStageForm
+                key={stage.id}
+                projectId={project.id}
+                stage={stage}
+                actions={actions}
+                users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
+              />
+            ))
           ) : (
             <div className="card p-6">
               <h2 className="text-sm font-semibold">Obra finalizada</h2>

@@ -129,12 +129,32 @@ andamento continuam travadas na versão em que entraram. Reordenação é por bo
 subir/descer (sem lib de drag-and-drop). Command handlers só escrevem em versão `DRAFT`;
 versão publicada/arquivada é sempre rejeitada com `CommandError`.
 
+### Etapas paralelas — entregue
+
+Uma etapa com `mode: "PARALLEL"` bifurca ao ser concluída: abre um `StageInstance` por
+`WorkflowTransition` válida saindo dela (mesmo `forkId` em `StageInstance`, agrupando os
+ramos "irmãos"). Cada ramo evolui de forma independente; a etapa de convergência só abre
+quando o `joinPolicy` dela é satisfeito — `ALL` espera todo irmão concluir, `ANY` libera no
+primeiro e marca os demais como `SKIPPED` (dispensados). `ProjectWorkflowInstance.currentStageId`
+deixou de ser mantido manualmente: é sempre recalculado a partir de quais `StageInstance`
+seguem ativas (`null` quando há mais de uma). Engine puro e testado em
+`src/core/workflow/engine.ts` (`resolveForkTargets`, `resolveTargets`, `shouldJoin`) +
+`engine.test.ts`; orquestração transacional em
+`src/modules/projects/commands.ts:executeStageAction`.
+
+**Limitação conhecida**: bifurcar exige `WorkflowTransition` explícitas (uma por ramo) — o
+editor visual (`/admin/fluxos`) ainda não tem tela para criar transições, só
+`StageAction.targetStageId` (destino único). Por ora, configura-se uma bifurcação via
+script, no espírito do `scripts/demo-inserir-etapa.ts` — ver
+`scripts/demo-etapa-paralela.ts`, que bifurca Diretoria em RH + Segurança, convergindo em
+Financeiro. Rodar num rascunho e publicar como as demais mudanças de fluxo.
+
 ### Próximos passos (V1), na ordem sugerida
 
-1. **Etapas paralelas** — o modelo (`StageMode`, `JoinPolicy`) já existe; falta o engine
-   abrir várias `StageInstance` e aplicar o `joinPolicy` na convergência.
-2. **Upload real de anexos** (Vercel Blob) — hoje o campo `FILE` aceita link/referência.
-3. **Comentários com @menção** na tela da obra — modelo `Comment`/`Mention` já pronto.
-4. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
+1. **Upload real de anexos** (Vercel Blob) — hoje o campo `FILE` aceita link/referência.
+2. **Comentários com @menção** na tela da obra — modelo `Comment`/`Mention` já pronto.
+3. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
    `sla.breached`.
-5. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
+4. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
+5. **Editor de transições** no admin de fluxos — pré-requisito para configurar etapas
+   paralelas (e condições) pela tela, sem script.

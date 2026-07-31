@@ -22,9 +22,9 @@ export async function getDirectoryDashboard(actor: SessionContext) {
         plannedEndDate: { lt: now },
       },
     }),
-    prisma.projectWorkflowInstance.findMany({
-      where: { organizationId: orgId, completedAt: null },
-      include: { currentStage: { include: { department: true } } },
+    prisma.stageInstance.findMany({
+      where: { organizationId: orgId, status: { in: ["PENDING", "IN_PROGRESS"] } },
+      include: { stage: { include: { department: true } } },
     }),
     prisma.stageInstance.findMany({
       where: { organizationId: orgId, status: { in: ["COMPLETED", "IN_PROGRESS"] } },
@@ -39,17 +39,18 @@ export async function getDirectoryDashboard(actor: SessionContext) {
     }),
   ]);
 
-  // Quantas obras estão paradas em cada etapa — o gargalo aparece aqui.
+  // Quantas obras estão paradas em cada etapa — o gargalo aparece aqui. Uma
+  // obra com ramos paralelos ativos conta em cada etapa em que está — é o
+  // retrato correto de onde o trabalho está represado agora.
   const stageCounts = new Map<string, { name: string; color: string; order: number; count: number; department: string | null }>();
-  for (const instance of byStage) {
-    if (!instance.currentStage) continue;
-    const key = instance.currentStage.key;
+  for (const active of byStage) {
+    const key = active.stage.key;
     const entry = stageCounts.get(key) ?? {
-      name: instance.currentStage.name,
-      color: instance.currentStage.color,
-      order: instance.currentStage.order,
+      name: active.stage.name,
+      color: active.stage.color,
+      order: active.stage.order,
       count: 0,
-      department: instance.currentStage.department?.name ?? null,
+      department: active.stage.department?.name ?? null,
     };
     entry.count += 1;
     stageCounts.set(key, entry);

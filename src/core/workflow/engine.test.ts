@@ -6,11 +6,13 @@ import {
   getAvailableActions,
   getInitialStage,
   isSlaBreached,
+  resolveForkTargets,
   resolveTargetStage,
+  shouldJoin,
   validateStageFields,
   workflowProgress,
 } from "./engine";
-import { makeActor, makeLinearSnapshot, makeStage, makeField, makeAction } from "./fixtures";
+import { makeActor, makeLinearSnapshot, makeParallelSnapshot, makeStage, makeField, makeAction } from "./fixtures";
 import type { EvaluationContext, WorkflowSnapshot } from "./types";
 
 const emptyCtx: EvaluationContext = { field: {}, project: {}, actor: {} };
@@ -88,7 +90,7 @@ describe("permissões sobre a etapa", () => {
       fieldValues: { gerente: "user-9" },
     });
     expect(decision.allowed).toBe(true);
-    expect(decision.targetStage?.key).toBe("rh");
+    expect(decision.targetStages.map((s) => s.key)).toEqual(["rh"]);
   });
 
   it("bloqueia usuário de outro departamento", () => {
@@ -173,7 +175,7 @@ describe("campos obrigatórios x tipo de ação", () => {
       comment: "Faltou o escopo detalhado.",
     });
     expect(comComentario.allowed).toBe(true);
-    expect(comComentario.targetStage?.key).toBe("orcamento");
+    expect(comComentario.targetStages.map((s) => s.key)).toEqual(["orcamento"]);
   });
 });
 
@@ -274,11 +276,97 @@ describe("SLA e progresso", () => {
     expect(isSlaBreached(due, new Date("2025-12-31T00:00:00Z"))).toBe(false);
   });
 
-  it("progresso vai de 0 na primeira etapa a 100 no fim", () => {
+  it("progresso vai de 0 na primeira etapa até perto de 100 na última", () => {
     const snapshot = makeLinearSnapshot();
-    expect(workflowProgress(snapshot, "s-orcamento")).toBe(0);
-    expect(workflowProgress(snapshot, "s-diretoria")).toBe(50);
-    expect(workflowProgress(snapshot, null)).toBe(100);
+    expect(workflowProgress(snapshot, ["s-orcamento"])).toBe(0);
+    expect(workflowProgress(snapshot, ["s-diretoria"])).toBe(50);
+  });
+
+  it("sem etapa ativa (fluxo nunca iniciado) o progresso é 0 — encerrado é responsabilidade do chamador", () => {
+    const snapshot = makeLinearSnapshot();
+    expect(workflowProgress(snapshot, [])).toBe(0);
+  });
+
+  it("com ramos paralelos, usa o menos avançado", () => {
+    const snapshot = makeParallelSnapshot();
+    // RH e Segurança têm a mesma order (2); ambos ativos não muda o resultado.
+    expect(workflowProgress(snapshot, ["s-rh", "s-seguranca"])).toBe(
+      workflowProgress(snapshot, ["s-rh"]),
+    );
+    // Um ramo ainda em Diretoria (order 1) e outro já avançado (order 2, hipotético
+    // fora do fluxo real, só para exercitar o mínimo): o resultado usa o menor.
+    expect(workflowProgress(snapshot, ["s-diretoria", "s-financeiro"])).toBe(
+      workflowProgress(snapshot, ["s-diretoria"]),
+    );
+  });
+});
+
+describe("bifurcação e convergência (etapas paralelas)", () => {
+  it("etapa PARALLEL abre todos os ramos com condição satisfeita", () => {
+    const snapshot = makeParallelSnapshot();
+    const targets = resolveForkTargets(snapshot, snapshot.stages[1], "a-dir-next", emptyCtx);
+    expect(targets.map((s) => s.key).sort()).toEqual(["rh", "seguranca"]);
+  });
+
+  it("canTransition numa etapa PARALLEL devolve os dois ramos em targetStages", () => {
+    const snapshot = makeParallelSnapshot();
+    const decision = canTransition({
+      snapshot,
+      currentStageId: "s-diretoria",
+      actionKey: "avancar",
+      actor: makeActor({ departmentId: "dep-diretoria" }),
+      fieldValues: {},
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.targetStages.map((s) => s.key).sort()).toEqual(["rh", "seguranca"]);
+  });
+
+  it("etapa PARALLEL sem transições configuradas é um erro de configuração, não um fallback silencioso", () => {
+    const snapshot = makeParallelSnapshot();
+    snapshot.transitions = [];
+    const decision = canTransition({
+      snapshot,
+      currentStageId: "s-diretoria",
+      actionKey: "avancar",
+      actor: makeActor({ departmentId: "dep-diretoria" }),
+      fieldValues: {},
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.errors.join(" ")).toContain("ramos");
+  });
+
+  it("joinPolicy ALL só libera quando todos os irmãos concluíram", () => {
+    expect(shouldJoin("ALL", ["COMPLETED", "IN_PROGRESS"])).toBe(false);
+    expect(shouldJoin("ALL", ["COMPLETED", "COMPLETED"])).toBe(true);
+    expect(shouldJoin("ALL", ["COMPLETED", "SKIPPED"])).toBe(true);
+  });
+
+  it("joinPolicy ANY libera assim que o próprio ramo conclui", () => {
+    expect(shouldJoin("ANY", ["COMPLETED"])).toBe(true);
+    expect(shouldJoin("ANY", ["COMPLETED", "IN_PROGRESS", "PENDING"])).toBe(true);
+  });
+
+  it("devolver a partir de uma etapa PARALLEL não bifurca — vai para um único destino", () => {
+    const snapshot = makeParallelSnapshot();
+    snapshot.stages[1].actions.push(
+      makeAction({
+        id: "a-dir-back",
+        key: "devolver",
+        kind: "RETURN",
+        targetStageId: "s-orcamento",
+        requiresComment: true,
+      }),
+    );
+    const decision = canTransition({
+      snapshot,
+      currentStageId: "s-diretoria",
+      actionKey: "devolver",
+      actor: makeActor({ departmentId: "dep-diretoria" }),
+      fieldValues: {},
+      comment: "Faltou revisar o orçamento.",
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.targetStages.map((s) => s.key)).toEqual(["orcamento"]);
   });
 });
 

@@ -161,6 +161,7 @@ export function DynamicStageForm({
   return (
     <form action={formAction} className="card space-y-5 p-6">
       <input type="hidden" name="projectId" value={projectId} />
+      <input type="hidden" name="stageId" value={stage.id} />
 
       <div>
         <h2 className="text-sm font-semibold">Ação nesta etapa — {stage.name}</h2>

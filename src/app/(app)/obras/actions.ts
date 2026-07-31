@@ -44,6 +44,7 @@ export async function executeStageActionForm(
   const actor = await requireActor();
 
   const projectId = String(formData.get("projectId") ?? "");
+  const stageId = String(formData.get("stageId") ?? "");
   const actionKey = String(formData.get("actionKey") ?? "");
   const comment = String(formData.get("comment") ?? "");
 
@@ -81,7 +82,7 @@ export async function executeStageActionForm(
   }
 
   try {
-    await executeStageAction(actor, { projectId, actionKey, fieldValues, comment });
+    await executeStageAction(actor, { projectId, stageId, actionKey, fieldValues, comment });
   } catch (error) {
     return toState(error);
   }

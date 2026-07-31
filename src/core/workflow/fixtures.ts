@@ -1,6 +1,6 @@
 import type { Actor } from "@/core/rbac/can";
 import { PERMISSIONS } from "@/core/rbac/permissions";
-import type { StageActionDef, StageDef, StageFieldDef, WorkflowSnapshot } from "./types";
+import type { StageActionDef, StageDef, StageFieldDef, TransitionDef, WorkflowSnapshot } from "./types";
 
 /** Fábricas usadas pelos testes do engine. Nada aqui toca o banco. */
 
@@ -117,5 +117,87 @@ export function makeLinearSnapshot(): WorkflowSnapshot {
       }),
     ],
     transitions: [],
+  };
+}
+
+/**
+ * Fluxo com bifurcação: Diretoria (PARALLEL) abre RH e Segurança ao mesmo
+ * tempo; os dois convergem em Financeiro (joinPolicy configurável por teste).
+ */
+export function makeParallelSnapshot(joinPolicy: "ALL" | "ANY" = "ALL"): WorkflowSnapshot {
+  const transitions: TransitionDef[] = [
+    {
+      id: "t-dir-rh",
+      fromStageId: "s-diretoria",
+      toStageId: "s-rh",
+      actionId: "a-dir-next",
+      condition: null,
+      order: 0,
+    },
+    {
+      id: "t-dir-seguranca",
+      fromStageId: "s-diretoria",
+      toStageId: "s-seguranca",
+      actionId: "a-dir-next",
+      condition: null,
+      order: 1,
+    },
+  ];
+
+  return {
+    versionId: "v-parallel",
+    version: 1,
+    stages: [
+      makeStage({
+        id: "s-orcamento",
+        key: "orcamento",
+        name: "Orçamento",
+        displayStatus: "Obra Ganha",
+        order: 0,
+        isInitial: true,
+        departmentId: "dep-orcamento",
+        actions: [makeAction({ id: "a-orc-next", key: "avancar", targetStageId: "s-diretoria" })],
+      }),
+      makeStage({
+        id: "s-diretoria",
+        key: "diretoria",
+        name: "Diretoria",
+        displayStatus: "Planejamento Aprovado",
+        order: 1,
+        departmentId: "dep-diretoria",
+        mode: "PARALLEL",
+        actions: [makeAction({ id: "a-dir-next", key: "avancar" })],
+      }),
+      makeStage({
+        id: "s-rh",
+        key: "rh",
+        name: "RH",
+        displayStatus: "RH Concluído",
+        order: 2,
+        departmentId: "dep-rh",
+        actions: [makeAction({ id: "a-rh-next", key: "avancar", targetStageId: "s-financeiro" })],
+      }),
+      makeStage({
+        id: "s-seguranca",
+        key: "seguranca",
+        name: "Segurança",
+        displayStatus: "Segurança Liberada",
+        order: 2,
+        departmentId: "dep-seguranca",
+        actions: [makeAction({ id: "a-seg-next", key: "avancar", targetStageId: "s-financeiro" })],
+      }),
+      makeStage({
+        id: "s-financeiro",
+        key: "financeiro",
+        name: "Financeiro",
+        displayStatus: "Financeiro Liberado",
+        order: 3,
+        departmentId: "dep-financeiro",
+        joinPolicy,
+        isFinal: true,
+        actions: [makeAction({ id: "a-fin-finish", key: "finalizar", kind: "FINISH" })],
+      }),
+    ],
+    transitions,
   };
 }

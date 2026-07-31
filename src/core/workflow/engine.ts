@@ -4,8 +4,11 @@ import type {
   AvailableAction,
   EvaluationContext,
   FieldError,
+  JoinPolicy,
+  StageActionDef,
   StageDef,
   StageFieldDef,
+  StageInstanceStatus,
   TransitionDecision,
   WorkflowSnapshot,
 } from "./types";
@@ -160,6 +163,76 @@ export function resolveTargetStage(
   return next ?? null;
 }
 
+/**
+ * Todas as etapas de destino válidas a partir de uma bifurcação (`mode:
+ * "PARALLEL"`) — uma transição explícita por ramo, cada uma com sua própria
+ * condição satisfeita. Uma etapa paralela sem transições explícitas
+ * configuradas não tem para onde bifurcar (erro de configuração, não caem no
+ * fallback de "próxima etapa por order" — isso não faria sentido com mais de
+ * um ramo).
+ */
+export function resolveForkTargets(
+  snapshot: WorkflowSnapshot,
+  currentStage: StageDef,
+  actionId: string,
+  ctx: EvaluationContext,
+): StageDef[] {
+  const candidates = snapshot.transitions
+    .filter((t) => t.fromStageId === currentStage.id)
+    .filter((t) => t.actionId === null || t.actionId === actionId)
+    .sort((a, b) => a.order - b.order);
+
+  const targets: StageDef[] = [];
+  const seen = new Set<string>();
+
+  for (const transition of candidates) {
+    if (!evaluateCondition(transition.condition, ctx)) continue;
+    if (seen.has(transition.toStageId)) continue;
+    const target = getStage(snapshot, transition.toStageId);
+    if (!target) continue;
+    seen.add(transition.toStageId);
+    targets.push(target);
+  }
+
+  return targets;
+}
+
+/**
+ * Etapas de destino de uma ação, unificando os três casos: encerra o fluxo
+ * (nenhuma), bifurca (`resolveForkTargets`, várias) ou segue o caminho linear
+ * (`resolveTargetStage`, no máximo uma).
+ */
+export function resolveTargets(
+  snapshot: WorkflowSnapshot,
+  currentStage: StageDef,
+  action: StageActionDef,
+  ctx: EvaluationContext,
+): StageDef[] {
+  if (action.kind === "FINISH") return [];
+
+  // Só avançar bifurca. Devolver/reprovar sempre voltam para UMA etapa
+  // específica — não faria sentido "devolver em paralelo".
+  if (action.kind === "ADVANCE" && currentStage.mode === "PARALLEL") {
+    return resolveForkTargets(snapshot, currentStage, action.id, ctx);
+  }
+
+  const single = resolveTargetStage(snapshot, currentStage, action.id, ctx);
+  return single ? [single] : [];
+}
+
+/**
+ * A etapa de convergência libera quando o `joinPolicy` é satisfeito pelos
+ * ramos "irmãos" (mesmo `forkId`) já concluídos. `ANY` libera assim que o
+ * ramo que está fechando chega — os demais, se ainda abertos, são
+ * supersedidos pelo command handler. `ALL` exige que todo irmão esteja
+ * `COMPLETED` (ou `SKIPPED`, um ramo já dispensado por um join anterior).
+ * `siblingStatuses` deve incluir o status do próprio ramo que está fechando.
+ */
+export function shouldJoin(joinPolicy: JoinPolicy, siblingStatuses: readonly StageInstanceStatus[]): boolean {
+  if (joinPolicy === "ANY") return true;
+  return siblingStatuses.every((status) => status === "COMPLETED" || status === "SKIPPED");
+}
+
 export interface TransitionRequest {
   snapshot: WorkflowSnapshot;
   currentStageId: string;
@@ -183,6 +256,7 @@ export function canTransition(req: TransitionRequest): TransitionDecision {
       allowed: false,
       errors: ["Etapa atual não encontrada nesta versão do fluxo."],
       fieldErrors: [],
+      targetStages: [],
     };
   }
 
@@ -192,6 +266,7 @@ export function canTransition(req: TransitionRequest): TransitionDecision {
       allowed: false,
       errors: [`Ação "${req.actionKey}" não existe na etapa "${stage.name}".`],
       fieldErrors: [],
+      targetStages: [],
     };
   }
 
@@ -223,13 +298,14 @@ export function canTransition(req: TransitionRequest): TransitionDecision {
     actor: { userId: req.actor.userId, departmentId: req.actor.departmentId },
   };
 
-  const targetStage =
-    action.kind === "FINISH"
-      ? null
-      : resolveTargetStage(req.snapshot, stage, action.id, ctx);
+  const targetStages = resolveTargets(req.snapshot, stage, action, ctx);
 
-  if (action.kind !== "FINISH" && !targetStage) {
-    errors.push("Nenhuma etapa de destino aplicável para esta ação.");
+  if (action.kind !== "FINISH" && targetStages.length === 0) {
+    errors.push(
+      stage.mode === "PARALLEL"
+        ? "Esta etapa paralela não tem ramos configurados para esta ação."
+        : "Nenhuma etapa de destino aplicável para esta ação.",
+    );
   }
 
   return {
@@ -237,7 +313,7 @@ export function canTransition(req: TransitionRequest): TransitionDecision {
     errors,
     fieldErrors,
     action,
-    targetStage,
+    targetStages,
   };
 }
 
@@ -252,16 +328,26 @@ export function isSlaBreached(dueAt: Date | null, now: Date = new Date()): boole
   return dueAt !== null && now.getTime() > dueAt.getTime();
 }
 
-/** Percentual do fluxo já percorrido — alimenta a barra estilo iFood. */
+/**
+ * Percentual do fluxo já percorrido — alimenta a barra estilo iFood. Quando
+ * há mais de uma etapa ativa (ramos paralelos), usa a menos avançada — o
+ * progresso real da obra é limitado pelo ramo mais lento. Etapa concluída
+ * (fluxo encerrado) não é responsabilidade desta função: o chamador decide
+ * isso a partir de `Project.status`/`ProjectWorkflowInstance.completedAt`,
+ * não da ausência de etapas ativas.
+ */
 export function workflowProgress(
   snapshot: WorkflowSnapshot,
-  currentStageId: string | null,
+  activeStageIds: readonly string[],
 ): number {
   const ordered = [...snapshot.stages].sort((a, b) => a.order - b.order);
-  if (ordered.length === 0) return 0;
-  if (!currentStageId) return 100;
+  if (ordered.length === 0 || activeStageIds.length === 0) return 0;
 
-  const index = ordered.findIndex((s) => s.id === currentStageId);
-  if (index === -1) return 0;
+  const indices = activeStageIds
+    .map((id) => ordered.findIndex((s) => s.id === id))
+    .filter((index) => index !== -1);
+  if (indices.length === 0) return 0;
+
+  const index = Math.min(...indices);
   return Math.round((index / (ordered.length - 1 || 1)) * 100);
 }
