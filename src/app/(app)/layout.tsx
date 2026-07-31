@@ -125,19 +125,29 @@ export default async function AppLayout({
           ))}
         </nav>
 
-        <div className="mt-2 hidden items-center gap-2.5 border-t border-white/10 px-2 pt-3.5 lg:flex">
-          <div
-            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] text-sm font-bold text-white"
-            style={{ background: "linear-gradient(135deg, #818CF8, #4F46E5)" }}
-          >
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[13.5px] font-semibold text-white">{actor.userName}</div>
-            <div className="text-xs text-[#8B9AC0]">{actor.roleName}</div>
-          </div>
-          <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-[#8B9AC0]" />
-        </div>
+        <details className="group mt-2 hidden border-t border-white/10 px-2 pt-3.5 lg:block">
+          <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg py-1 outline-none [&::-webkit-details-marker]:hidden">
+            <div
+              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] text-sm font-bold text-white"
+              style={{ background: "linear-gradient(135deg, #818CF8, #4F46E5)" }}
+            >
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-[13.5px] font-semibold text-white">{actor.userName}</div>
+              <div className="text-xs text-[#8B9AC0]">{actor.roleName}</div>
+            </div>
+            <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-[#8B9AC0] transition group-open:rotate-180" />
+          </summary>
+          <form action={logout} className="mt-1.5">
+            <button
+              type="submit"
+              className="w-full rounded-lg px-3 py-2 text-left text-xs text-[#CBD5E1] hover:bg-white/5"
+            >
+              Sair
+            </button>
+          </form>
+        </details>
 
         <form action={logout} className="lg:hidden">
           <button
