@@ -31,7 +31,7 @@ export default async function AppLayout({
     },
     {
       href: "/admin/profissionais",
-      label: "Engenheiros e encarregados",
+      label: "Engenheiros",
       show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
     },
   ].filter((item) => item.show);
