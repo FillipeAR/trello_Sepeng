@@ -18,6 +18,7 @@ export default async function AppLayout({
     { href: "/dashboard", label: "Painel", show: true },
     { href: "/obras", label: "Obras", show: true },
     { href: "/minhas-tarefas", label: "Minhas tarefas", show: Boolean(actor.departmentId) },
+    { href: "/lembretes", label: "Lembretes", show: true },
     {
       href: "/obras/criar",
       label: "Nova obra",

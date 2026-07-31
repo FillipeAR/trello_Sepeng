@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireActor } from "@/server/actor";
 import { CommandError, executeStageAction, registerProjectUpdate } from "@/modules/projects/commands";
+import { completeTask, createTask, deleteTask, reopenTask } from "@/modules/tasks/commands";
 import { processOutbox } from "@/modules/notifications/dispatcher";
 
 export interface ActionState {
@@ -116,5 +117,84 @@ export async function registerUpdateAction(
   }
 
   revalidatePath(`/obras/${projectId}`);
+  return { success: true };
+}
+
+// --- Lembretes ---------------------------------------------------------------
+
+/**
+ * `<input type="date">` devolve "AAAA-MM-DD", que o `Date` interpreta como
+ * meia-noite UTC — em BRT isso volta um dia. Interpreta como data local.
+ */
+function parseLocalDate(value: string): Date | null {
+  return value ? new Date(`${value}T00:00:00`) : null;
+}
+
+export async function createTaskAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+  const assigneeId = String(formData.get("assigneeId") ?? "").trim();
+  const dueAt = String(formData.get("dueAt") ?? "").trim();
+
+  try {
+    await createTask(actor, {
+      projectId,
+      data: {
+        title: String(formData.get("title") ?? "").trim(),
+        description: String(formData.get("description") ?? "").trim() || null,
+        assigneeId: assigneeId || null,
+        dueAt: parseLocalDate(dueAt),
+      },
+    });
+  } catch (error) {
+    return toState(error);
+  }
+
+  await processOutbox();
+  revalidatePath(`/obras/${projectId}`);
+  revalidatePath("/lembretes");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function completeTaskAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+  try {
+    await completeTask(actor, { taskId: String(formData.get("taskId") ?? "") });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/obras/${projectId}`);
+  revalidatePath("/lembretes");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function reopenTaskAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+  try {
+    await reopenTask(actor, { taskId: String(formData.get("taskId") ?? "") });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/obras/${projectId}`);
+  revalidatePath("/lembretes");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteTaskAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+  try {
+    await deleteTask(actor, { taskId: String(formData.get("taskId") ?? "") });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/obras/${projectId}`);
+  revalidatePath("/lembretes");
+  revalidatePath("/dashboard");
   return { success: true };
 }

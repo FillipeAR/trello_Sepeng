@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { requireActor } from "@/server/actor";
 import { prisma } from "@/server/db";
 import { getProjectDetail } from "@/modules/projects/queries";
+import { listProjectTasks } from "@/modules/tasks/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
+import { TasksSection } from "@/modules/projects/components/TasksSection";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 
 export default async function ObraPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,11 +18,14 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
 
   const { project, activeStages, timeline, progress, updates } = detail;
 
-  const users = await prisma.membership.findMany({
-    where: { organizationId: actor.organizationId, isActive: true },
-    include: { user: { select: { id: true, name: true } } },
-    orderBy: { user: { name: "asc" } },
-  });
+  const [users, tasks] = await Promise.all([
+    prisma.membership.findMany({
+      where: { organizationId: actor.organizationId, isActive: true },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { user: { name: "asc" } },
+    }),
+    listProjectTasks(actor, project.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -85,6 +90,12 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
               fluxo v{detail.workflowVersion}
             </p>
           </section>
+
+          <TasksSection
+            projectId={project.id}
+            tasks={tasks}
+            users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
+          />
 
           {updates.length > 0 ? (
             <section className="card p-6">

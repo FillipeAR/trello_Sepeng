@@ -158,6 +158,19 @@ suporta, mas a UI fica em uma comparação por transição — cobre bifurcaçã
 condicional sem precisar de script). `scripts/demo-etapa-paralela.ts` continua valendo como
 referência/atalho, mas deixou de ser o único caminho.
 
+### Lembretes — entregue
+
+Pendências pontuais dentro de uma obra, fora do fluxo formal (modelo `Task`, que já
+existia no schema e na RBAC — `task:manage` — mas não tinha commands/queries/UI). CRUD em
+`src/modules/tasks/commands.ts` (`createTask`/`completeTask`/`reopenTask`/`deleteTask`),
+autorização = mesma leitura de obra (`canReadProject`) + permissão `task:manage`. Seção
+"Lembretes" em cada obra (`TasksSection.tsx`) e página `/lembretes` com os lembretes
+atribuídos a (ou criados por) mim em todas as obras, com destaque para vencidos — mais um
+widget "Meus lembretes" no `/dashboard`. Atribuir um lembrete a alguém enfileira
+`task.assigned` no outbox e notifica só o responsável (não o departamento inteiro, ao
+contrário dos demais eventos) — ver `resolveRecipients` em
+`src/modules/notifications/dispatcher.ts`.
+
 ### Próximos passos (V1), na ordem sugerida
 
 1. **Upload real de anexos** (Vercel Blob) — hoje o campo `FILE` aceita link/referência.

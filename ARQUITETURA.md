@@ -200,6 +200,11 @@ ação de origem opcional e uma condição simples (comparação única, sem `an
 aninhados na V1). É o que faltava para configurar bifurcação e roteamento condicional pela
 tela, sem script.
 
+✅ Lembretes (`Task`) — pendências pontuais por obra, fora do fluxo formal, com
+responsável e prazo opcionais. CRUD em `src/modules/tasks/`, seção na página da obra,
+página `/lembretes` (cross-obra) e widget no dashboard. Atribuição notifica só o
+responsável via outbox (`task.assigned`).
+
 Falta:
 escalonamento automático por SLA vencido · upload real de anexos (Vercel Blob) ·
 comentários com @menção · registro de progresso com fotos · relatório final de

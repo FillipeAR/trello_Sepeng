@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireActor } from "@/server/actor";
 import { getDepartmentDashboard, getDirectoryDashboard } from "@/modules/dashboard/queries";
 import { listMyQueue } from "@/modules/projects/queries";
-import { formatHours } from "@/lib/format";
+import { listMyReminders } from "@/modules/tasks/queries";
+import { formatDate, formatHours } from "@/lib/format";
 
 function Stat({
   label,
@@ -25,10 +26,11 @@ function Stat({
 
 export default async function DashboardPage() {
   const actor = await requireActor();
-  const [directory, department, queue] = await Promise.all([
+  const [directory, department, queue, reminders] = await Promise.all([
     getDirectoryDashboard(actor),
     getDepartmentDashboard(actor),
     listMyQueue(actor),
+    listMyReminders(actor),
   ]);
 
   const maxBottleneck = Math.max(1, ...directory.bottlenecks.map((b) => b.count));
@@ -139,34 +141,68 @@ export default async function DashboardPage() {
         </section>
       </div>
 
-      {queue.length > 0 ? (
-        <section className="card p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Aguardando você</h2>
-            <Link href="/minhas-tarefas" className="text-xs text-primary">
-              Ver todas
-            </Link>
-          </div>
-          <ul className="space-y-2">
-            {queue.slice(0, 5).map((p) => (
-              <li key={p.id}>
-                <Link
-                  href={`/obras/${p.id}`}
-                  className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
-                >
-                  <span>
-                    <span className="font-mono text-xs text-muted">{p.code}</span>{" "}
-                    <span className="font-medium">{p.name}</span>
-                  </span>
-                  <span className={p.isLate ? "text-xs text-warning" : "text-xs text-muted"}>
-                    {p.isLate ? "Atrasada" : p.displayStatus}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {queue.length > 0 ? (
+          <section className="card p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Aguardando você</h2>
+              <Link href="/minhas-tarefas" className="text-xs text-primary">
+                Ver todas
+              </Link>
+            </div>
+            <ul className="space-y-2">
+              {queue.slice(0, 5).map((p) => (
+                <li key={p.id}>
+                  <Link
+                    href={`/obras/${p.id}`}
+                    className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
+                  >
+                    <span>
+                      <span className="font-mono text-xs text-muted">{p.code}</span>{" "}
+                      <span className="font-medium">{p.name}</span>
+                    </span>
+                    <span className={p.isLate ? "text-xs text-warning" : "text-xs text-muted"}>
+                      {p.isLate ? "Atrasada" : p.displayStatus}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {reminders.length > 0 ? (
+          <section className="card p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Meus lembretes</h2>
+              <Link href="/lembretes" className="text-xs text-primary">
+                Ver todos
+              </Link>
+            </div>
+            <ul className="space-y-2">
+              {reminders.slice(0, 5).map((r) => {
+                const late = Boolean(r.dueAt && r.dueAt < new Date());
+                return (
+                  <li key={r.id}>
+                    <Link
+                      href={`/obras/${r.project.id}`}
+                      className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm transition hover:bg-surface-muted"
+                    >
+                      <span>
+                        <span className="font-mono text-xs text-muted">{r.project.code}</span>{" "}
+                        <span className="font-medium">{r.title}</span>
+                      </span>
+                      <span className={late ? "text-xs font-medium text-warning" : "text-xs text-muted"}>
+                        {r.dueAt ? formatDate(r.dueAt) : "Sem prazo"}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
+      </div>
     </div>
   );
 }

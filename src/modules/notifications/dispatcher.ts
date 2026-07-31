@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
-import { DOMAIN_EVENTS } from "@/server/outbox";
+import { formatDateTime } from "@/lib/format";
+import { DOMAIN_EVENTS, type DomainEventType } from "@/server/outbox";
 
 /**
  * Worker do outbox. Hoje entrega apenas notificação in-app; e-mail e WhatsApp
@@ -16,6 +17,10 @@ interface EventPayload {
   departmentId?: string | null;
   displayStatus?: string;
   actorName?: string;
+  taskId?: string;
+  taskTitle?: string;
+  dueAt?: string | null;
+  assigneeId?: string;
 }
 
 function describe(type: string, p: EventPayload): { title: string; body: string } {
@@ -45,6 +50,13 @@ function describe(type: string, p: EventPayload): { title: string; body: string 
         title: `${p.projectName} foi finalizada`,
         body: `A obra ${p.projectCode} concluiu o fluxo completo.`,
       };
+    case DOMAIN_EVENTS.TASK_ASSIGNED:
+      return {
+        title: `Novo lembrete: ${p.taskTitle}`,
+        body: `${p.actorName ?? "Alguém"} atribuiu um lembrete pra você em ${p.projectName}${
+          p.dueAt ? ` — prazo ${formatDateTime(p.dueAt)}` : ""
+        }.`,
+      };
     default:
       return {
         title: p.projectName,
@@ -56,8 +68,14 @@ function describe(type: string, p: EventPayload): { title: string; body: string 
 /** Quem precisa saber: o departamento que recebeu a obra e a equipe alocada. */
 async function resolveRecipients(
   organizationId: string,
+  type: DomainEventType,
   payload: EventPayload,
 ): Promise<string[]> {
+  // Lembrete é pessoal: só quem foi designado, nunca o departamento inteiro.
+  if (type === DOMAIN_EVENTS.TASK_ASSIGNED) {
+    return payload.assigneeId ? [payload.assigneeId] : [];
+  }
+
   const recipients = new Set<string>();
 
   if (payload.departmentId) {
@@ -89,7 +107,7 @@ export async function processOutbox(limit = 50): Promise<number> {
   for (const event of events) {
     try {
       const payload = event.payload as unknown as EventPayload;
-      const recipients = await resolveRecipients(event.organizationId, payload);
+      const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
       const { title, body } = describe(event.type, payload);
 
       if (recipients.length > 0) {
