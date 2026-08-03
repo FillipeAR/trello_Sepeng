@@ -202,10 +202,23 @@ banco remoto (Neon) isso passa fácil do timeout padrão de 5s do Prisma
 comando pra 20s. Se "Criar rascunho do fluxo" começar a falhar/travar em produção outra
 vez com fluxos maiores, é o primeiro lugar a olhar.
 
+### Upload real de anexos — entregue
+
+Campo `FILE` agora faz upload de verdade pro Vercel Blob (store `obraflow-anexos`, acesso
+**privado** — sem URL pública). `executeStageActionForm`
+(`src/app/(app)/obras/actions.ts`) intercepta os campos `FILE` do FormData antes de chamar
+o command handler, sobe o arquivo (`put(..., { access: "private" })`, path
+`obras/{projectId}/{stageId}/{campo}-{nome}`, limite de 20MB) e grava
+`{ url, name, size }` como valor do campo — pro resto do sistema (engine, auditoria) é só
+mais um valor de campo, igual antes. Download passa por `/api/anexos` (`src/app/api/anexos/route.ts`),
+que reaplica `canActorReadProject` (novo helper em `src/modules/projects/queries.ts`) antes
+de buscar o blob — nunca expõe a URL crua do Blob pro cliente. `next.config.ts` sobe o
+`serverActions.bodySizeLimit` padrão (1MB) pra 25MB, senão o Next rejeita o upload antes de
+chegar no código.
+
 ### Próximos passos (V1), na ordem sugerida
 
-1. **Upload real de anexos** (Vercel Blob) — hoje o campo `FILE` aceita link/referência.
-2. **Comentários com @menção** na tela da obra — modelo `Comment`/`Mention` já pronto.
-3. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
+1. **Comentários com @menção** na tela da obra — modelo `Comment`/`Mention` já pronto.
+2. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
    `sla.breached`.
-4. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
+3. **Paginação por cursor** em `listProjects` (hoje `take: 100`).

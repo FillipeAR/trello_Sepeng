@@ -1,11 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { put } from "@vercel/blob";
 import { z } from "zod";
 import { requireActor } from "@/server/actor";
 import { CommandError, executeStageAction, registerProjectUpdate } from "@/modules/projects/commands";
 import { completeTask, createTask, deleteTask, reopenTask } from "@/modules/tasks/commands";
 import { processOutbox } from "@/modules/notifications/dispatcher";
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 export interface ActionState {
   errors?: string[];
@@ -54,8 +57,9 @@ export async function executeStageActionForm(
     if (!name.startsWith("field.")) continue;
     const key = name.slice("field.".length);
     const type = String(formData.get(`type.${key}`) ?? "TEXT");
-    const value = String(raw);
+    if (type === "FILE") continue; // tratado à parte abaixo — precisa de upload assíncrono
 
+    const value = String(raw);
     switch (type) {
       case "NUMBER":
       case "CURRENCY":
@@ -80,6 +84,29 @@ export async function executeStageActionForm(
     if (String(formData.get(name)) === "CHECKBOX" && !(key in fieldValues)) {
       fieldValues[key] = false;
     }
+  }
+
+  // Anexos: sobem pro Vercel Blob antes de executar a ação. O valor gravado
+  // no campo é {url, name, size} — igual a qualquer outro valor de campo pro
+  // resto do sistema (engine, auditoria, etc. não sabem que é um arquivo).
+  for (const [name, raw] of formData.entries()) {
+    if (!name.startsWith("field.")) continue;
+    const key = name.slice("field.".length);
+    const type = String(formData.get(`type.${key}`) ?? "TEXT");
+    if (type !== "FILE" || !(raw instanceof File) || raw.size === 0) continue;
+
+    if (raw.size > MAX_ATTACHMENT_BYTES) {
+      return {
+        errors: [`O arquivo "${raw.name}" passa de 20MB.`],
+        fieldErrors: { [key]: "Arquivo muito grande (máx. 20MB)." },
+      };
+    }
+
+    const blob = await put(`obras/${projectId}/${stageId}/${key}-${raw.name}`, raw, {
+      access: "private",
+      addRandomSuffix: true,
+    });
+    fieldValues[key] = { url: blob.url, name: raw.name, size: raw.size };
   }
 
   try {

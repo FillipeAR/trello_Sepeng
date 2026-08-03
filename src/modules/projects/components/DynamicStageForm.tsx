@@ -118,13 +118,7 @@ function Field({
       );
       break;
     case "FILE":
-      control = (
-        <input
-          {...common}
-          type="text"
-          placeholder="Link ou referência do documento (upload chega na V1)"
-        />
-      );
+      control = <input {...common} type="file" className="input file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-surface-muted file:px-3 file:py-1.5 file:text-sm file:font-medium" />;
       break;
     default:
       control = <input {...common} type="text" />;

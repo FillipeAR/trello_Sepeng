@@ -1,14 +1,31 @@
 import type { TimelineStep } from "../queries";
 import { formatDateTime, formatFieldValue } from "@/lib/format";
 
+interface UploadedFile {
+  url: string;
+  name: string;
+  size: number;
+}
+
+function isUploadedFile(value: unknown): value is UploadedFile {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as UploadedFile).url === "string" &&
+    typeof (value as UploadedFile).name === "string"
+  );
+}
+
 /**
  * A peça de UX central: o "rastreamento do pedido" da obra. Cada etapa mostra
  * estado, responsável, quando entrou/saiu e o que foi preenchido.
  */
 export function StageTimeline({
+  projectId,
   steps,
   progress,
 }: {
+  projectId: string;
   steps: TimelineStep[];
   progress: number;
 }) {
@@ -131,7 +148,16 @@ export function StageTimeline({
                       <div key={v.label} className="flex justify-between gap-4">
                         <dt className="text-muted">{v.label}</dt>
                         <dd className="text-right font-medium">
-                          {formatFieldValue(v.value, v.type)}
+                          {v.type === "FILE" && isUploadedFile(v.value) ? (
+                            <a
+                              href={`/api/anexos?url=${encodeURIComponent(v.value.url)}&projectId=${projectId}`}
+                              className="text-primary hover:underline"
+                            >
+                              {v.value.name}
+                            </a>
+                          ) : (
+                            formatFieldValue(v.value, v.type)
+                          )}
                         </dd>
                       </div>
                     ))}

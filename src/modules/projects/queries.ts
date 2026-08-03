@@ -31,6 +31,28 @@ function readScopeWhere(actor: SessionContext) {
   return { ...base, OR: or };
 }
 
+/** Mesma checagem de leitura usada em toda consulta de obra — para pontos que só
+ * precisam de um booleano (ex.: rota de download de anexo), sem montar a página inteira. */
+export async function canActorReadProject(actor: SessionContext, projectId: string): Promise<boolean> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, organizationId: actor.organizationId, deletedAt: null },
+    include: {
+      team: { select: { userId: true } },
+      stageInstances: { select: { stage: { select: { departmentId: true } } } },
+    },
+  });
+  if (!project) return false;
+
+  const visitedDepartmentIds = project.stageInstances
+    .map((si) => si.stage.departmentId)
+    .filter((d): d is string => Boolean(d));
+
+  return canReadProject(actor, {
+    visitedDepartmentIds,
+    assignedUserIds: project.team.map((t) => t.userId),
+  });
+}
+
 export interface ProjectListFilters {
   stageKey?: string;
   status?: "ACTIVE" | "COMPLETED" | "CANCELLED";

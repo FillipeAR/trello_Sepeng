@@ -82,7 +82,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
 
       <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
         <div className="space-y-6">
-          <StageTimeline steps={timeline} progress={progress} />
+          <StageTimeline projectId={project.id} steps={timeline} progress={progress} />
 
           <section className="card p-6">
             <h2 className="mb-3 text-sm font-semibold">Escopo resumido</h2>
