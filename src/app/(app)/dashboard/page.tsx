@@ -6,6 +6,10 @@ import { listMyQueue } from "@/modules/projects/queries";
 import { listMyReminders } from "@/modules/tasks/queries";
 import { formatDate, formatHours } from "@/lib/format";
 
+function overdueBy(dueAt: Date): string {
+  return formatHours((Date.now() - dueAt.getTime()) / 3_600_000);
+}
+
 const KPI_STYLES = {
   indigo: { color: "#6366F1", bg: "#EEF2FF" },
   blue: { color: "#3B82F6", bg: "#EFF6FF" },
@@ -86,6 +90,43 @@ export default async function DashboardPage() {
           progress={directory.totals.avgProgress}
         />
       </section>
+
+      {directory.slaBreaches.length > 0 ? (
+        <section className="card border border-danger/20 bg-danger/[0.03] p-[22px]">
+          <div className="mb-1 flex items-center gap-2">
+            <TriangleAlert size={18} className="text-danger" strokeWidth={1.75} />
+            <h2 className="text-base font-bold text-danger">
+              SLA vencido ({directory.slaBreaches.length})
+            </h2>
+          </div>
+          <p className="mb-4 text-xs text-muted">
+            Etapas que já passaram do prazo e ainda estão em aberto — ordenadas da mais
+            atrasada pra mais recente.
+          </p>
+          <ul className="space-y-2">
+            {directory.slaBreaches.slice(0, 8).map((b, i) => (
+              <li key={`${b.projectId}-${b.stageName}-${i}`}>
+                <Link
+                  href={`/obras/${b.projectId}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-danger/20 bg-surface px-3 py-2.5 text-sm transition hover:bg-danger/5"
+                >
+                  <span className="min-w-0 truncate">
+                    <span className="font-mono text-xs text-muted">{b.projectCode}</span>{" "}
+                    <span className="font-medium">{b.projectName}</span>
+                    <span className="text-muted"> · {b.stageName}</span>
+                    {b.departmentName ? (
+                      <span className="text-xs text-muted"> ({b.departmentName})</span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-danger">
+                    {overdueBy(b.dueAt)} atrasado
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {department ? (
         <section className="card p-5">

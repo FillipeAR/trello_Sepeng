@@ -65,6 +65,13 @@ function describe(type: string, p: EventPayload): { title: string; body: string 
         title: `${p.actorName ?? "Alguém"} mencionou você em ${p.projectName}`,
         body: p.excerpt ?? "Você foi marcado num comentário.",
       };
+    case DOMAIN_EVENTS.SLA_BREACHED:
+      return {
+        title: `SLA vencido: ${p.projectName}`,
+        body: `A etapa "${p.stageName}" está com o prazo estourado${
+          p.dueAt ? ` desde ${formatDateTime(p.dueAt)}` : ""
+        }.`,
+      };
     default:
       return {
         title: p.projectName,

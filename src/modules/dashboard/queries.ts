@@ -30,7 +30,10 @@ export async function getDirectoryDashboard(actor: SessionContext) {
       .then((r) => Math.round(r._avg.progressPercent ?? 0)),
     prisma.stageInstance.findMany({
       where: { organizationId: orgId, status: { in: ["PENDING", "IN_PROGRESS"] } },
-      include: { stage: { include: { department: true } } },
+      include: {
+        stage: { include: { department: true } },
+        project: { select: { id: true, code: true, name: true } },
+      },
     }),
     prisma.stageInstance.findMany({
       where: { organizationId: orgId, status: { in: ["COMPLETED", "IN_PROGRESS"] } },
@@ -62,6 +65,21 @@ export async function getDirectoryDashboard(actor: SessionContext) {
     stageCounts.set(key, entry);
   }
 
+  // SLA vencido agora — direto do `dueAt`, não do flag `slaBreached` (que só
+  // é marcado pelo cron diário de escalonamento). Painel do dashboard fica
+  // sempre em tempo real, sem esperar a próxima rodada do cron.
+  const slaBreaches = byStage
+    .filter((si) => si.dueAt && si.dueAt < now)
+    .map((si) => ({
+      projectId: si.project.id,
+      projectCode: si.project.code,
+      projectName: si.project.name,
+      stageName: si.stage.name,
+      departmentName: si.stage.department?.name ?? null,
+      dueAt: si.dueAt!,
+    }))
+    .sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+
   // Tempo médio de permanência por etapa (horas) — só etapas já concluídas.
   const durations = new Map<string, { name: string; totalHours: number; samples: number; breaches: number; order: number }>();
   for (const si of stageDurations) {
@@ -83,6 +101,7 @@ export async function getDirectoryDashboard(actor: SessionContext) {
 
   return {
     totals: { total, active, completed, late, avgProgress },
+    slaBreaches,
     bottlenecks: [...stageCounts.values()].sort((a, b) => b.count - a.count),
     stageMetrics: [...durations.values()]
       .sort((a, b) => a.order - b.order)

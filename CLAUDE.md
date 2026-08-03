@@ -234,8 +234,26 @@ client `prisma` global, então só serve fora de transação (queries, rotas). D
 de dentro do `createComment`. Dentro de uma `tx`, repita o check inline com `tx` +
 `canReadProject` (puro), como `tasks/commands.ts` já fazia.
 
+### Escalonamento por SLA vencido — entregue
+
+`vercel.ts` declara um cron (`@vercel/config`, o jeito atual de configurar cron no Vercel —
+substitui `vercel.json`) rodando **1x/dia** (11:00 UTC = 08:00 BRT) contra
+`/api/cron/sla-check` — frequência conservadora de propósito porque o plano Hobby limita
+cron a uma vez por dia; quem estiver no Pro pode apertar isso em `vercel.ts`. A rota chama
+`checkSlaBreaches` (`src/modules/notifications/sla.ts`): varre `StageInstance` ativa com
+`dueAt` vencido e `slaBreached: false`, marca o flag (idempotência — cada etapa gera o
+evento `sla.breached` uma única vez), grava auditoria com `actorId: null` (não tem ator,
+é o sistema) e enfileira a notificação pro departamento dono da etapa + equipe da obra
+(mesmo `resolveRecipients` genérico do dispatcher). Protegida por `CRON_SECRET`
+(`Authorization: Bearer`) — sem ela, a rota aceita qualquer chamada.
+
+Só o **cron** (a notificação) é diário. O painel "SLA vencido" no `/dashboard` é
+independente disso e sempre em tempo real — calcula direto do `dueAt` contra `now()`, não
+espera a próxima rodada do cron pra aparecer.
+
+`scripts/force-sla-overdue.ts` (dev/teste): força a primeira etapa ativa sem SLA marcado a
+ficar vencida, pra testar o cron sem esperar o prazo de verdade passar.
+
 ### Próximos passos (V1), na ordem sugerida
 
-1. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
-   `sla.breached`.
-2. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
+1. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
