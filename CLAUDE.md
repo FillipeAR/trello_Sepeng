@@ -254,6 +254,31 @@ espera a próxima rodada do cron pra aparecer.
 `scripts/force-sla-overdue.ts` (dev/teste): força a primeira etapa ativa sem SLA marcado a
 ficar vencida, pra testar o cron sem esperar o prazo de verdade passar.
 
-### Próximos passos (V1), na ordem sugerida
+### Paginação por cursor em `listProjects` — entregue
 
-1. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
+Trocou o `take: 100` sem paginação (obras além da 100ª simplesmente sumiam, sem aviso) por
+cursor de verdade: `listProjects` agora recebe `cursor`/`limit` e devolve
+`{ items, nextCursor }` — `nextCursor` é o id da última obra da página, usado como cursor
+da próxima. `stageKey` foi pro `WHERE` do Prisma (antes era filtro em memória, incompatível
+com paginação); `onlyLate` continua em memória de propósito (depende de `isSlaBreached`,
+regra do engine — jogar isso pro SQL duplicaria lógica), então uma página pode voltar com
+menos itens que o `limit` mesmo havendo mais resultados — o cursor segue avançando certo,
+só o preenchimento por página fica irregular nesse filtro específico.
+
+`/obras` (`src/app/(app)/obras/page.tsx`) ganhou "Página anterior"/"Próxima página" — pilha
+de cursores visitados via querystring (`back=`, comma-separated), sem `OFFSET` e sem client
+JS. **Achado durante o teste**: strings vazias são falsy em JS — usar `""` tanto pra
+"primeira página" quanto pra "sem valor" quebrava o link de voltar (o parâmetro sumia da
+URL, ou o `href` inteiro virava `""` e a checagem `href ? ... : null` escondia o link à
+toa). Resolvido com um marcador não-vazio (`"_"`) pra página 1 na pilha, e `buildQuery`
+sempre prefixando com `/obras` em vez de devolver string vazia quando não há filtro nenhum.
+
+`listMyQueue` (fila de departamento, usa `listProjects` por baixo) não pagina — busca um
+lote generoso (`limit: 300`) de uma vez, contexto interno onde isso é aceitável.
+
+### Próximos passos (V1)
+
+Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
+escalonamento por SLA, paginação por cursor) estão entregues. Próximos candidatos,
+sem ordem definida: paginação/filtros mais ricos nas outras listagens (`/lembretes`,
+auditoria), export CSV/PDF, e o que a Sepeng priorizar no uso real.

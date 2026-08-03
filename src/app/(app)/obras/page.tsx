@@ -4,19 +4,64 @@ import { listProjects } from "@/modules/projects/queries";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { formatCurrency, formatDate } from "@/lib/format";
 
+const PAGE_SIZE = 20;
+
+/**
+ * Monta a URL de `/obras` preservando os filtros atuais, só trocando os
+ * campos passados. Sempre prefixa com `/obras` (nunca devolve só `""`) —
+ * "sem parâmetro nenhum" (voltar pra página 1 sem filtro) é uma URL válida,
+ * mas string vazia é falsy em JS; se o retorno fosse `""` a checagem
+ * `prevHref ? ... : null` do componente escondia o link por engano.
+ */
+function buildQuery(base: Record<string, string | undefined>, overrides: Record<string, string | undefined>) {
+  const merged = { ...base, ...overrides };
+  const usp = new URLSearchParams();
+  for (const [key, value] of Object.entries(merged)) {
+    if (value) usp.set(key, value);
+  }
+  const qs = usp.toString();
+  return qs ? `/obras?${qs}` : "/obras";
+}
+
 export default async function ObrasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; atraso?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; atraso?: string; cursor?: string; back?: string }>;
 }) {
   const actor = await requireActor();
   const params = await searchParams;
 
-  const projects = await listProjects(actor, {
+  const { items: projects, nextCursor } = await listProjects(actor, {
     search: params.q,
     status: params.status as "ACTIVE" | "COMPLETED" | "CANCELLED" | undefined,
     onlyLate: params.atraso === "1",
+    cursor: params.cursor,
+    limit: PAGE_SIZE,
   });
+
+  const filters = { q: params.q, status: params.status, atraso: params.atraso };
+
+  // Pilha de cursores já visitados, pra "Página anterior" funcionar sem
+  // OFFSET. "_" marca a primeira página (sem cursor nenhum) — precisa de um
+  // marcador não-vazio: uma string vazia de verdade some da query string
+  // (buildQuery descarta valores falsy), o que quebraria o passo página1→2.
+  const FIRST_PAGE = "_";
+  const backStack = params.back ? params.back.split(",") : [];
+  const currentCursorForStack = params.cursor ?? FIRST_PAGE;
+
+  const nextHref = nextCursor
+    ? buildQuery(filters, { cursor: nextCursor, back: [...backStack, currentCursorForStack].join(",") })
+    : null;
+
+  const prevHref =
+    backStack.length > 0
+      ? buildQuery(filters, {
+          cursor: backStack[backStack.length - 1] === FIRST_PAGE ? undefined : backStack[backStack.length - 1],
+          back: backStack.slice(0, -1).join(","),
+        })
+      : null;
+
+  const isFirstPage = backStack.length === 0;
 
   return (
     <div className="space-y-6">
@@ -24,7 +69,8 @@ export default async function ObrasPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Obras</h1>
           <p className="text-sm text-muted">
-            {projects.length} obra(s) visíveis para o seu perfil.
+            {projects.length} obra(s) nesta página
+            {isFirstPage && !nextCursor ? "" : " — use a paginação abaixo pra ver mais"}.
           </p>
         </div>
         {actor.permissions.includes(PERMISSIONS.PROJECT_CREATE) ? (
@@ -134,6 +180,25 @@ export default async function ObrasPage({
           </table>
         </div>
       )}
+
+      {prevHref || nextHref ? (
+        <div className="flex items-center justify-between">
+          {prevHref ? (
+            <Link href={prevHref} className="btn-ghost text-sm">
+              ← Página anterior
+            </Link>
+          ) : (
+            <span />
+          )}
+          {nextHref ? (
+            <Link href={nextHref} className="btn-ghost text-sm">
+              Próxima página →
+            </Link>
+          ) : (
+            <span />
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

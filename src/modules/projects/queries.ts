@@ -58,18 +58,79 @@ export interface ProjectListFilters {
   status?: "ACTIVE" | "COMPLETED" | "CANCELLED";
   search?: string;
   onlyLate?: boolean;
+  /** Id da última obra da página anterior — pura paginação por cursor, sem `OFFSET`. */
+  cursor?: string;
+  /** @default 30 */
+  limit?: number;
 }
+
+export interface ProjectListItem {
+  id: string;
+  code: string;
+  name: string;
+  client: string;
+  location: string;
+  contractValue: number;
+  plannedEndDate: Date;
+  progressPercent: number;
+  status: string;
+  stageName: string;
+  stageKey: string | null;
+  displayStatus: string;
+  stageColor: string;
+  departmentName: string | null;
+  dueAt: Date | null;
+  activeStageCount: number;
+  activeStageKeys: string[];
+  isLate: boolean;
+  manager: string | null;
+}
+
+export interface ProjectListPage {
+  items: ProjectListItem[];
+  nextCursor: string | null;
+}
+
+const DEFAULT_PAGE_SIZE = 30;
 
 /**
  * Lista obras com a(s) etapa(s) ativa(s) no momento — uma obra em ramos
  * paralelos tem mais de uma. Os campos singulares (`stageName`,
  * `displayStatus`, etc.) refletem a etapa ativa mais antiga (a "principal"
  * para exibição em tabela); `activeStages` traz todas.
+ *
+ * Paginação por cursor (não `OFFSET`/página numerada): `nextCursor` é o id
+ * da última obra da página atual — passa como `cursor` pra buscar a próxima.
+ * Estável mesmo com obras novas entrando entre uma página e outra, e não
+ * degrada com o tamanho da tabela (o antigo `take: 100` sem paginação
+ * simplesmente escondia obras além da 100ª, sem nenhum aviso).
+ *
+ * `onlyLate` continua filtrado em memória (depende de `isSlaBreached`, regra
+ * do engine, não dá pra empurrar pro SQL sem duplicar lógica) — combinado
+ * com paginação, uma página pode voltar com menos itens que `limit` mesmo
+ * havendo mais resultados adiante; o cursor continua avançando corretamente,
+ * só o preenchimento por página fica irregular. Aceitável pro volume de uma
+ * construtora; reавaliar se isso incomodar na prática.
  */
-export async function listProjects(actor: SessionContext, filters: ProjectListFilters = {}) {
+export async function listProjects(
+  actor: SessionContext,
+  filters: ProjectListFilters = {},
+): Promise<ProjectListPage> {
+  const limit = filters.limit ?? DEFAULT_PAGE_SIZE;
+
   const where = {
     ...readScopeWhere(actor),
     ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.stageKey
+      ? {
+          stageInstances: {
+            some: {
+              status: { in: ["PENDING", "IN_PROGRESS"] as ("PENDING" | "IN_PROGRESS")[] },
+              stage: { key: filters.stageKey },
+            },
+          },
+        }
+      : {}),
     ...(filters.search
       ? {
           OR: [
@@ -81,10 +142,11 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
       : {}),
   };
 
-  const projects = await prisma.project.findMany({
+  const rows = await prisma.project.findMany({
     where,
-    orderBy: { createdAt: "desc" },
-    take: 100,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+    ...(filters.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
     include: {
       team: { include: { user: { select: { id: true, name: true } } } },
       stageInstances: {
@@ -95,12 +157,13 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
     },
   });
 
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? page[page.length - 1].id : null;
+
   const now = new Date();
 
-  return projects
-    .filter((p) =>
-      filters.stageKey ? p.stageInstances.some((si) => si.stage.key === filters.stageKey) : true,
-    )
+  const items: ProjectListItem[] = page
     .map((p) => {
       const active = p.stageInstances;
       const primary = active[0] ?? null;
@@ -128,6 +191,8 @@ export async function listProjects(actor: SessionContext, filters: ProjectListFi
       };
     })
     .filter((p) => (filters.onlyLate ? p.isLate : true));
+
+  return { items, nextCursor };
 }
 
 export interface TimelineStep {
@@ -264,10 +329,16 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
   };
 }
 
-/** Fila pessoal: obras com alguma etapa ativa no departamento do usuário. */
+/**
+ * Fila pessoal: obras com alguma etapa ativa no departamento do usuário. Uso
+ * interno (widget do dashboard, `/minhas-tarefas`), não a listagem paginada
+ * — busca um lote generoso de uma vez em vez de paginar, fila de
+ * departamento não costuma passar disso na prática.
+ */
 export async function listMyQueue(actor: SessionContext) {
-  const projects = await listProjects(actor, { status: "ACTIVE" });
   if (!actor.departmentId) return [];
+
+  const { items } = await listProjects(actor, { status: "ACTIVE", limit: 300 });
 
   const stageDepartments = await prisma.workflowStage.findMany({
     where: { organizationId: actor.organizationId, departmentId: actor.departmentId },
@@ -275,7 +346,7 @@ export async function listMyQueue(actor: SessionContext) {
   });
   const myStageKeys = new Set(stageDepartments.map((s) => s.key));
 
-  return projects.filter((p) => p.activeStageKeys.some((key) => myStageKeys.has(key)));
+  return items.filter((p) => p.activeStageKeys.some((key) => myStageKeys.has(key)));
 }
 
 export async function getProjectAuditTrail(actor: SessionContext, projectId: string) {
