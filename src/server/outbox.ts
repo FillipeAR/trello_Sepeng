@@ -14,6 +14,7 @@ export const DOMAIN_EVENTS = {
   PROJECT_REJECTED: "project.rejected",
   PROJECT_FINISHED: "project.finished",
   TASK_ASSIGNED: "task.assigned",
+  MENTION_CREATED: "mention.created",
   SLA_BREACHED: "sla.breached",
 } as const;
 

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireActor } from "@/server/actor";
 import { CommandError, executeStageAction, registerProjectUpdate } from "@/modules/projects/commands";
 import { completeTask, createTask, deleteTask, reopenTask } from "@/modules/tasks/commands";
+import { createComment } from "@/modules/comments/commands";
 import { processOutbox } from "@/modules/notifications/dispatcher";
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
@@ -223,5 +224,28 @@ export async function deleteTaskAction(_prev: ActionState, formData: FormData): 
   revalidatePath(`/obras/${projectId}`);
   revalidatePath("/lembretes");
   revalidatePath("/dashboard");
+  return { success: true };
+}
+
+// --- Comentários ---------------------------------------------------------------
+
+export async function createCommentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+
+  try {
+    await createComment(actor, {
+      projectId,
+      data: {
+        body: String(formData.get("body") ?? ""),
+        mentionUserIds: formData.getAll("mentionUserIds").map(String).filter(Boolean),
+      },
+    });
+  } catch (error) {
+    return toState(error);
+  }
+
+  await processOutbox();
+  revalidatePath(`/obras/${projectId}`);
   return { success: true };
 }

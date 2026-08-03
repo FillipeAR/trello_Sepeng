@@ -21,6 +21,9 @@ interface EventPayload {
   taskTitle?: string;
   dueAt?: string | null;
   assigneeId?: string;
+  commentId?: string;
+  excerpt?: string;
+  mentionedUserIds?: string[];
 }
 
 function describe(type: string, p: EventPayload): { title: string; body: string } {
@@ -57,6 +60,11 @@ function describe(type: string, p: EventPayload): { title: string; body: string 
           p.dueAt ? ` — prazo ${formatDateTime(p.dueAt)}` : ""
         }.`,
       };
+    case DOMAIN_EVENTS.MENTION_CREATED:
+      return {
+        title: `${p.actorName ?? "Alguém"} mencionou você em ${p.projectName}`,
+        body: p.excerpt ?? "Você foi marcado num comentário.",
+      };
     default:
       return {
         title: p.projectName,
@@ -71,9 +79,13 @@ async function resolveRecipients(
   type: DomainEventType,
   payload: EventPayload,
 ): Promise<string[]> {
-  // Lembrete é pessoal: só quem foi designado, nunca o departamento inteiro.
+  // Lembrete e menção são pessoais: só quem foi designado/marcado, nunca o
+  // departamento inteiro.
   if (type === DOMAIN_EVENTS.TASK_ASSIGNED) {
     return payload.assigneeId ? [payload.assigneeId] : [];
+  }
+  if (type === DOMAIN_EVENTS.MENTION_CREATED) {
+    return payload.mentionedUserIds ?? [];
   }
 
   const recipients = new Set<string>();

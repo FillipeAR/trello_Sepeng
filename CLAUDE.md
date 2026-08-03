@@ -216,9 +216,26 @@ de buscar o blob — nunca expõe a URL crua do Blob pro cliente. `next.config.t
 `serverActions.bodySizeLimit` padrão (1MB) pra 25MB, senão o Next rejeita o upload antes de
 chegar no código.
 
+### Comentários com @menção — entregue
+
+Thread de comentários na obra (`entityType: PROJECT`) em `src/modules/comments/`, separada
+dos comentários de justificativa que `executeStageAction` já grava por etapa
+(`entityType: STAGE_INSTANCE`). @menção **não** é parser de texto — é uma lista de
+usuários explícita (`mentionUserIds`), validada contra `Membership` ativa; a UI
+(`CommentsSection.tsx`) insere "@Nome" no corpo do comentário quando alguém é selecionado
+num `<select>`, só pra manter a convenção visual, mas quem é notificado é sempre a lista
+explícita, nunca o texto. Notifica só quem foi marcado (evento `mention.created`, mesmo
+padrão pessoal do `task.assigned`).
+
+**Cuidado ao reusar `canActorReadProject`** (`src/modules/projects/queries.ts`): ele usa o
+client `prisma` global, então só serve fora de transação (queries, rotas). Dentro de um
+`prisma.$transaction`, misturar o client global com a `tx` quebra o protocolo do Postgres
+("bind message supplies N parameters...") — foi exatamente o bug que apareceu ao chamá-lo
+de dentro do `createComment`. Dentro de uma `tx`, repita o check inline com `tx` +
+`canReadProject` (puro), como `tasks/commands.ts` já fazia.
+
 ### Próximos passos (V1), na ordem sugerida
 
-1. **Comentários com @menção** na tela da obra — modelo `Comment`/`Mention` já pronto.
-2. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
+1. **Escalonamento por SLA vencido** — cron chamando `processOutbox` e gerando
    `sla.breached`.
-3. **Paginação por cursor** em `listProjects` (hoje `take: 100`).
+2. **Paginação por cursor** em `listProjects` (hoje `take: 100`).

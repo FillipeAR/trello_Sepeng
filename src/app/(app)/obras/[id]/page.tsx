@@ -5,9 +5,11 @@ import { prisma } from "@/server/db";
 import { getProjectDetail } from "@/modules/projects/queries";
 import { listProjectTasks } from "@/modules/tasks/queries";
 import { listProfessionals } from "@/modules/staff/queries";
+import { listProjectComments } from "@/modules/comments/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
+import { CommentsSection } from "@/modules/projects/components/CommentsSection";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 
 export default async function ObraPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +21,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
 
   const { project, activeStages, timeline, progress, updates } = detail;
 
-  const [users, tasks, professionals] = await Promise.all([
+  const [users, tasks, professionals, comments] = await Promise.all([
     prisma.membership.findMany({
       where: { organizationId: actor.organizationId, isActive: true },
       include: { user: { select: { id: true, name: true } } },
@@ -27,6 +29,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
     }),
     listProjectTasks(actor, project.id),
     listProfessionals(actor),
+    listProjectComments(actor, project.id),
   ]);
 
   return (
@@ -120,6 +123,12 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
               </ul>
             </section>
           ) : null}
+
+          <CommentsSection
+            projectId={project.id}
+            comments={comments}
+            members={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
+          />
         </div>
 
         <div className="space-y-6">
