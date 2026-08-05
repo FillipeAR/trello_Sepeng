@@ -16,6 +16,10 @@ export const DOMAIN_EVENTS = {
   TASK_ASSIGNED: "task.assigned",
   MENTION_CREATED: "mention.created",
   SLA_BREACHED: "sla.breached",
+  MEASUREMENT_APPROVED: "measurement.approved",
+  MEASUREMENT_REJECTED: "measurement.rejected",
+  DOCUMENT_EXPIRING_SOON: "document.expiring_soon",
+  DOCUMENT_EXPIRED: "document.expired",
 } as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];

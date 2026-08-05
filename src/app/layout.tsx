@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -13,6 +14,11 @@ export const metadata: Metadata = {
   title: "ObraFlow — Gestão Operacional de Obras",
   description:
     "Acompanhe cada obra em tempo real: etapa atual, responsáveis, pendências e próximos passos.",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "ObraFlow" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#4f46e5",
 };
 
 export default function RootLayout({
@@ -23,7 +29,10 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <ServiceWorkerRegister />
+      </body>
     </html>
   );
 }

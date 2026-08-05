@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   Plus,
   Search,
+  Truck,
   Workflow,
 } from "lucide-react";
 import { requireActor } from "@/server/actor";
@@ -56,6 +57,12 @@ export default async function AppLayout({
           label: "Engenheiros",
           icon: <HardHat strokeWidth={1.75} />,
           show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
+        },
+        {
+          href: "/admin/fornecedores",
+          label: "Fornecedores",
+          icon: <Truck strokeWidth={1.75} />,
+          show: actor.permissions.includes(PERMISSIONS.PROCUREMENT_MANAGE),
         },
       ],
     },

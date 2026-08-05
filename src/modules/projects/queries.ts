@@ -297,6 +297,14 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
     .filter((stage): stage is StageDef => Boolean(stage))
     .map((stage) => ({ stage, actions: getAvailableActions(snapshot, stage.id, actor) }));
 
+  const updateIds = project.updates.map((u) => u.id);
+  const updatePhotos = updateIds.length
+    ? await prisma.attachment.findMany({
+        where: { organizationId: actor.organizationId, entityType: "PROJECT_UPDATE", entityId: { in: updateIds } },
+      })
+    : [];
+  const photoByUpdateId = new Map(updatePhotos.map((p) => [p.entityId, p]));
+
   return {
     project: {
       id: project.id,
@@ -318,14 +326,18 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
     timeline,
     progress: workflowProgress(snapshot, activeStageIds),
     team: project.team.map((t) => ({ id: t.userId, name: t.user.name, role: t.role })),
-    updates: project.updates.map((u) => ({
-      id: u.id,
-      type: u.type,
-      description: u.description,
-      progressPercent: u.progressPercent,
-      occurredAt: u.occurredAt,
-      authorName: u.author.name,
-    })),
+    updates: project.updates.map((u) => {
+      const photo = photoByUpdateId.get(u.id);
+      return {
+        id: u.id,
+        type: u.type,
+        description: u.description,
+        progressPercent: u.progressPercent,
+        occurredAt: u.occurredAt,
+        authorName: u.author.name,
+        photo: photo ? { url: photo.url, name: photo.fileName } : null,
+      };
+    }),
   };
 }
 

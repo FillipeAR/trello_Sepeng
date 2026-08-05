@@ -3,15 +3,20 @@ import { revalidatePath } from "next/cache";
 import { requireActor } from "@/server/actor";
 import { prisma } from "@/server/db";
 import { formatDateTime } from "@/lib/format";
+import { getMyNotificationSettings } from "@/modules/notifications/queries";
+import { WhatsAppPreferences } from "@/modules/notifications/components/WhatsAppPreferences";
 
 export default async function NotificacoesPage() {
   const actor = await requireActor();
 
-  const notifications = await prisma.notification.findMany({
-    where: { organizationId: actor.organizationId, userId: actor.userId },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [notifications, settings] = await Promise.all([
+    prisma.notification.findMany({
+      where: { organizationId: actor.organizationId, userId: actor.userId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    getMyNotificationSettings(actor),
+  ]);
 
   async function markAllRead() {
     "use server";
@@ -40,6 +45,8 @@ export default async function NotificacoesPage() {
           </form>
         ) : null}
       </div>
+
+      <WhatsAppPreferences settings={settings} />
 
       {notifications.length === 0 ? (
         <div className="card p-10 text-center text-sm text-muted">

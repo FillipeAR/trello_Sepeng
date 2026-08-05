@@ -465,6 +465,11 @@ export const projectUpdateSchema = z.object({
   type: z.enum(["PROGRESS", "INCIDENT", "NOTE"]),
   description: z.string().min(3, "Descreva a atualização."),
   progressPercent: z.coerce.number().int().min(0).max(100).optional(),
+  /** Já veio do upload pro Blob (ver /api/atualizacoes) — o command só grava o Attachment. */
+  photo: z
+    .object({ url: z.string(), name: z.string(), size: z.number(), mimeType: z.string() })
+    .nullable()
+    .optional(),
 });
 
 export async function registerProjectUpdate(
@@ -499,6 +504,21 @@ export async function registerProjectUpdate(
       await tx.project.update({
         where: { id: project.id },
         data: { progressPercent: data.progressPercent },
+      });
+    }
+
+    if (data.photo) {
+      await tx.attachment.create({
+        data: {
+          organizationId: actor.organizationId,
+          entityType: "PROJECT_UPDATE",
+          entityId: update.id,
+          fileName: data.photo.name,
+          url: data.photo.url,
+          mimeType: data.photo.mimeType,
+          size: data.photo.size,
+          uploadedById: actor.userId,
+        },
       });
     }
 

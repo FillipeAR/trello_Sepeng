@@ -2,14 +2,23 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireActor } from "@/server/actor";
 import { prisma } from "@/server/db";
+import { hasPermission } from "@/core/rbac/can";
+import { PERMISSIONS } from "@/core/rbac/permissions";
 import { getProjectDetail } from "@/modules/projects/queries";
 import { listProjectTasks } from "@/modules/tasks/queries";
 import { listProfessionals } from "@/modules/staff/queries";
 import { listProjectComments } from "@/modules/comments/queries";
+import { getProjectMeasurements } from "@/modules/measurements/queries";
+import { getProjectDocuments } from "@/modules/documents/queries";
+import { getProjectPurchaseOrders, listSuppliers } from "@/modules/procurement/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
 import { CommentsSection } from "@/modules/projects/components/CommentsSection";
+import { MeasurementsSection } from "@/modules/projects/components/MeasurementsSection";
+import { DocumentsSection } from "@/modules/projects/components/DocumentsSection";
+import { ProcurementSection } from "@/modules/projects/components/ProcurementSection";
+import { ProgressUpdateForm } from "@/modules/projects/components/ProgressUpdateForm";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 
 export default async function ObraPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,8 +29,9 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
   if (!detail) notFound();
 
   const { project, activeStages, timeline, progress, updates } = detail;
+  const canUpdateProgress = hasPermission(actor, PERMISSIONS.PROJECT_UPDATE_PROGRESS);
 
-  const [users, tasks, professionals, comments] = await Promise.all([
+  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers] = await Promise.all([
     prisma.membership.findMany({
       where: { organizationId: actor.organizationId, isActive: true },
       include: { user: { select: { id: true, name: true } } },
@@ -30,6 +40,10 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
     listProjectTasks(actor, project.id),
     listProfessionals(actor),
     listProjectComments(actor, project.id),
+    getProjectMeasurements(actor, project.id),
+    getProjectDocuments(actor, project.id),
+    getProjectPurchaseOrders(actor, project.id),
+    listSuppliers(actor),
   ]);
 
   return (
@@ -102,6 +116,18 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
             users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
           />
 
+          {measurements ? (
+            <MeasurementsSection projectId={project.id} rows={measurements.rows} summary={measurements.summary} />
+          ) : null}
+
+          {documents ? <DocumentsSection projectId={project.id} documents={documents} /> : null}
+
+          {purchaseOrders ? (
+            <ProcurementSection projectId={project.id} orders={purchaseOrders} suppliers={suppliers} />
+          ) : null}
+
+          {canUpdateProgress ? <ProgressUpdateForm projectId={project.id} /> : null}
+
           {updates.length > 0 ? (
             <section className="card p-6">
               <h2 className="mb-3 text-sm font-semibold">Atualizações da execução</h2>
@@ -117,6 +143,14 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
                     <p className="mt-1 text-sm">{u.description}</p>
                     {u.progressPercent !== null ? (
                       <p className="mt-1 text-xs text-muted">Progresso: {u.progressPercent}%</p>
+                    ) : null}
+                    {u.photo ? (
+                      <a
+                        href={`/api/anexos?url=${encodeURIComponent(u.photo.url)}&projectId=${project.id}`}
+                        className="mt-1 inline-block text-xs text-primary hover:underline"
+                      >
+                        {u.photo.name}
+                      </a>
                     ) : null}
                   </li>
                 ))}

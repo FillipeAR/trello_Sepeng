@@ -1,10 +1,16 @@
 import { prisma } from "@/server/db";
-import { formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { DOMAIN_EVENTS, type DomainEventType } from "@/server/outbox";
+import { PERMISSIONS } from "@/core/rbac/permissions";
+import { resolveChannelEnabled } from "@/core/notifications/preferences";
+import { sendWhatsAppMessage } from "./whatsapp";
 
 /**
- * Worker do outbox. Hoje entrega apenas notificação in-app; e-mail e WhatsApp
- * entram como novos `channels` aqui, sem tocar no engine nem nos comandos.
+ * Worker do outbox. Entrega notificação in-app (sempre) e WhatsApp
+ * (opt-in, ver `resolveChannelEnabled`) — e-mail entra do mesmo jeito quando
+ * for a vez dele. Falha ao enviar WhatsApp pra um destinatário não derruba o
+ * evento inteiro: se derrubasse, o retry recriaria as notificações in-app já
+ * gravadas via `createMany` (não é idempotente a esse nível).
  */
 
 interface EventPayload {
@@ -24,6 +30,13 @@ interface EventPayload {
   commentId?: string;
   excerpt?: string;
   mentionedUserIds?: string[];
+  /** Destinatário único de um evento pessoal (ex.: medição decidida — avisa quem registrou). */
+  recipientId?: string;
+  measurementReferenceDate?: string;
+  measuredValue?: string;
+  rejectionReason?: string;
+  documentType?: string;
+  documentExpiresAt?: string;
 }
 
 function describe(type: string, p: EventPayload): { title: string; body: string } {
@@ -72,6 +85,34 @@ function describe(type: string, p: EventPayload): { title: string; body: string 
           p.dueAt ? ` desde ${formatDateTime(p.dueAt)}` : ""
         }.`,
       };
+    case DOMAIN_EVENTS.MEASUREMENT_APPROVED:
+      return {
+        title: `Medição aprovada: ${p.projectName}`,
+        body: `${p.actorName ?? "Alguém"} aprovou a medição de ${
+          p.measurementReferenceDate ? formatDateTime(p.measurementReferenceDate) : "referência"
+        } (${p.measuredValue ?? "—"}).`,
+      };
+    case DOMAIN_EVENTS.MEASUREMENT_REJECTED:
+      return {
+        title: `Medição reprovada: ${p.projectName}`,
+        body: `${p.actorName ?? "Alguém"} reprovou a medição de ${
+          p.measurementReferenceDate ? formatDateTime(p.measurementReferenceDate) : "referência"
+        }${p.rejectionReason ? ` — ${p.rejectionReason}` : ""}.`,
+      };
+    case DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON:
+      return {
+        title: `Documento vencendo: ${p.projectName}`,
+        body: `"${p.documentType}" vence em ${
+          p.documentExpiresAt ? formatDate(p.documentExpiresAt) : "breve"
+        } — providencie a renovação.`,
+      };
+    case DOMAIN_EVENTS.DOCUMENT_EXPIRED:
+      return {
+        title: `Documento vencido: ${p.projectName}`,
+        body: `"${p.documentType}" venceu em ${
+          p.documentExpiresAt ? formatDate(p.documentExpiresAt) : "data passada"
+        }.`,
+      };
     default:
       return {
         title: p.projectName,
@@ -94,6 +135,22 @@ async function resolveRecipients(
   if (type === DOMAIN_EVENTS.MENTION_CREATED) {
     return payload.mentionedUserIds ?? [];
   }
+  if (type === DOMAIN_EVENTS.MEASUREMENT_APPROVED || type === DOMAIN_EVENTS.MEASUREMENT_REJECTED) {
+    return payload.recipientId ? [payload.recipientId] : [];
+  }
+  // Vencimento de documento não tem departamento dono nem equipe alocada
+  // como destinatário natural — avisa quem tem a permissão de cuidar disso.
+  if (type === DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON || type === DOMAIN_EVENTS.DOCUMENT_EXPIRED) {
+    const managers = await prisma.membership.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+        role: { permissions: { some: { permission: { key: PERMISSIONS.DOCUMENT_MANAGE } } } },
+      },
+      select: { userId: true },
+    });
+    return managers.map((m) => m.userId);
+  }
 
   const recipients = new Set<string>();
 
@@ -112,6 +169,36 @@ async function resolveRecipients(
   for (const t of team) recipients.add(t.userId);
 
   return [...recipients];
+}
+
+/** Envia WhatsApp pra quem tem telefone + preferência habilitada pra este evento. Nunca lança. */
+async function dispatchWhatsApp(
+  type: DomainEventType,
+  recipients: string[],
+  title: string,
+  body: string,
+): Promise<void> {
+  if (recipients.length === 0) return;
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: recipients }, phone: { not: null } },
+    select: { id: true, phone: true },
+  });
+  if (users.length === 0) return;
+
+  const prefs = await prisma.notificationPreference.findMany({
+    where: { userId: { in: users.map((u) => u.id) }, eventType: type, channel: "WHATSAPP" },
+  });
+
+  for (const user of users) {
+    const enabled = resolveChannelEnabled(prefs, type, "WHATSAPP", { hasPhone: Boolean(user.phone) });
+    if (!enabled || !user.phone) continue;
+    try {
+      await sendWhatsAppMessage(user.phone, title, body);
+    } catch (error) {
+      console.error(`Falha ao enviar WhatsApp (evento ${type}, usuário ${user.id}):`, error);
+    }
+  }
 }
 
 export async function processOutbox(limit = 50): Promise<number> {
@@ -140,6 +227,8 @@ export async function processOutbox(limit = 50): Promise<number> {
             linkUrl: `/obras/${payload.projectId}`,
           })),
         });
+
+        await dispatchWhatsApp(event.type as DomainEventType, recipients, title, body);
       }
 
       await prisma.outboxEvent.update({

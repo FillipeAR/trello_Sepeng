@@ -84,6 +84,18 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum PurchaseOrderStatus {
+  PENDING
+  DELIVERED
+  CANCELLED
+}
+
+enum MeasurementStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum CommentEntityType {
   PROJECT
   STAGE_INSTANCE
@@ -152,6 +164,8 @@ model User {
   email        String    @unique
   passwordHash String
   avatarUrl    String?
+  /// E.164 (ex. +5511987654321) — necessário pra habilitar notificação por WhatsApp.
+  phone        String?
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -170,6 +184,10 @@ model User {
   createdTasks    Task[]                   @relation("TaskCreatedBy")
   attachments     Attachment[]
   auditLogs       AuditLog[]
+  createdMeasurements  Measurement[]       @relation("MeasurementCreatedBy")
+  approvedMeasurements Measurement[]       @relation("MeasurementApprovedBy")
+  createdDocuments     ProjectDocument[]
+  createdPurchaseOrders PurchaseOrder[]
 
   @@map("users")
 }
@@ -436,6 +454,9 @@ model Project {
   team           ProjectTeamAssignment[]
   updates        ProjectUpdate[]
   tasks          Task[]
+  measurements   Measurement[]
+  documents      ProjectDocument[]
+  purchaseOrders PurchaseOrder[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -487,6 +508,7 @@ model StageInstance {
   completedBy      User?                   @relation("StageCompletedBy", fields: [completedById], references: [id])
   fieldValues      StageFieldValue[]
   tasks            Task[]
+  purchaseOrders   PurchaseOrder[]
 
   @@index([organizationId, status])
   @@index([stageId, enteredAt])
@@ -562,6 +584,144 @@ model Attachment {
 
   @@index([organizationId, entityType, entityId])
   @@map("attachments")
+}
+
+// ---------------------------------------------------------------------------
+// Financeiro
+// ---------------------------------------------------------------------------
+
+/// Medição periódica: valor previsto x valor efetivamente executado no
+/// período, com aprovação — é o que sustenta orçamento vs. custo real.
+/// Ligada só a Project (não a uma etapa específica do fluxo): o fluxo é dado
+/// e configurável por organização, uma obra pode nem ter uma etapa
+/// financeira nomeada, e "medição" aqui é sobre o período de referência
+/// (competência), não sobre em que etapa a obra está.
+model Measurement {
+  id              String            @id @default(cuid())
+  organizationId  String
+  projectId       String
+  referenceDate   DateTime
+  plannedValue    Decimal           @db.Decimal(14, 2)
+  measuredValue   Decimal           @db.Decimal(14, 2)
+  notes           String?
+  status          MeasurementStatus @default(PENDING)
+  createdById     String
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User    @relation("MeasurementCreatedBy", fields: [createdById], references: [id])
+  approvedBy User?   @relation("MeasurementApprovedBy", fields: [approvedById], references: [id])
+
+  @@index([organizationId, projectId, referenceDate])
+  @@index([organizationId, status])
+  @@map("measurements")
+}
+
+// ---------------------------------------------------------------------------
+// Compliance
+// ---------------------------------------------------------------------------
+
+/// Documento com validade (ART/RRT, alvará, licença, seguro, ...). `type` é
+/// texto livre, não enum — igual a `Professional.role`: a lista de tipos de
+/// documento não é fluxo (não é etapa/status do `WorkflowVersion`), mas
+/// também não deveria travar em um enum fixo do schema; a UI sugere valores
+/// comuns sem restringir. Um documento é um registro corrente (a renovação
+/// atualiza `expiresAt` no mesmo registro, sem histórico de versões — fora
+/// do escopo do MVP). O arquivo escaneado é um `Attachment` genérico
+/// (entityType "PROJECT_DOCUMENT"), mesmo padrão da foto de `ProjectUpdate`.
+model ProjectDocument {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  projectId           String
+  type                String
+  referenceNumber     String?
+  issuedAt            DateTime?
+  expiresAt           DateTime
+  notes               String?
+  /// Idempotência do cron de vencimento (`checkDocumentExpirations`) — cada
+  /// limiar (30 dias antes / vencido) só gera um evento, mesmo rodando todo
+  /// dia. Zerado quando `expiresAt` muda (renovação reabre o alerta).
+  expiringAlertSentAt DateTime?
+  expiredAlertSentAt  DateTime?
+  createdById         String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, projectId])
+  @@index([organizationId, expiresAt])
+  @@map("project_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Suprimentos
+// ---------------------------------------------------------------------------
+
+/// Fornecedor: cadastro próprio por organização, sem relação com `User` —
+/// mesmo padrão de `Professional` (staff de campo sem login).
+model Supplier {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  category       String?
+  phone          String?
+  email          String?
+  cnpj           String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([organizationId])
+  @@map("suppliers")
+}
+
+/// Pedido de compra: entidade própria ligada à obra e (quando existe) à
+/// etapa ativa no momento do pedido — `stageInstanceId` é preenchido
+/// automaticamente pelo command handler com a etapa aberta da obra, não
+/// escolhido manualmente. `expectedDeliveryDate` vencida com `status` ainda
+/// `PENDING` é "atraso"; isso não mexe no engine nem no `dueAt` da etapa —
+/// é só lido do lado de fora (`src/core/procurement/impact.ts`) pra avisar
+/// quando o atraso ameaça uma etapa que ainda está aberta. Ligar isso ao
+/// `dueAt` da etapa de verdade (empurrar prazo automaticamente) ficou de
+/// fora de propósito: mudaria o cronograma sozinho, decisão de negócio que
+/// não estava clara no escopo do MVP.
+model PurchaseOrder {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  projectId            String
+  stageInstanceId      String?
+  supplierId           String
+  description          String
+  value                Decimal?            @db.Decimal(14, 2)
+  orderedAt            DateTime            @default(now())
+  expectedDeliveryDate DateTime
+  deliveredAt          DateTime?
+  status               PurchaseOrderStatus @default(PENDING)
+  notes                String?
+  createdById          String
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stageInstance StageInstance? @relation(fields: [stageInstanceId], references: [id], onDelete: SetNull)
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  createdBy     User           @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, projectId])
+  @@index([organizationId, status, expectedDeliveryDate])
+  @@map("purchase_orders")
 }
 
 // ---------------------------------------------------------------------------
