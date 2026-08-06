@@ -11,9 +11,11 @@ import { listProjectComments } from "@/modules/comments/queries";
 import { getProjectMeasurements } from "@/modules/measurements/queries";
 import { getProjectDocuments } from "@/modules/documents/queries";
 import { getProjectPurchaseOrders, listSuppliers } from "@/modules/procurement/queries";
+import { getProjectOrgChart } from "@/modules/orgchart/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
+import { OrgChartSection } from "@/modules/projects/components/OrgChartSection";
 import { CommentsSection } from "@/modules/projects/components/CommentsSection";
 import { MeasurementsSection } from "@/modules/projects/components/MeasurementsSection";
 import { DocumentsSection } from "@/modules/projects/components/DocumentsSection";
@@ -31,20 +33,22 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
   const { project, activeStages, timeline, progress, updates } = detail;
   const canUpdateProgress = hasPermission(actor, PERMISSIONS.PROJECT_UPDATE_PROGRESS);
 
-  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers] = await Promise.all([
-    prisma.membership.findMany({
-      where: { organizationId: actor.organizationId, isActive: true },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { user: { name: "asc" } },
-    }),
-    listProjectTasks(actor, project.id),
-    listProfessionals(actor),
-    listProjectComments(actor, project.id),
-    getProjectMeasurements(actor, project.id),
-    getProjectDocuments(actor, project.id),
-    getProjectPurchaseOrders(actor, project.id),
-    listSuppliers(actor),
-  ]);
+  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers, orgChart] =
+    await Promise.all([
+      prisma.membership.findMany({
+        where: { organizationId: actor.organizationId, isActive: true },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { user: { name: "asc" } },
+      }),
+      listProjectTasks(actor, project.id),
+      listProfessionals(actor),
+      listProjectComments(actor, project.id),
+      getProjectMeasurements(actor, project.id),
+      getProjectDocuments(actor, project.id),
+      getProjectPurchaseOrders(actor, project.id),
+      listSuppliers(actor),
+      getProjectOrgChart(actor, project.id),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -83,7 +87,9 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
         </div>
         <div className="card p-4">
           <div className="text-xs text-muted">Valor do contrato</div>
-          <div className="mt-1 font-semibold">{formatCurrency(project.contractValue)}</div>
+          <div className="mt-1 font-semibold">
+            {project.contractValue === null ? "Restrito" : formatCurrency(project.contractValue)}
+          </div>
         </div>
         <div className="card p-4">
           <div className="text-xs text-muted">Prazo</div>
@@ -115,6 +121,16 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
             tasks={tasks}
             users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
           />
+
+          {orgChart ? (
+            <OrgChartSection
+              projectId={project.id}
+              positions={orgChart.positions}
+              occupantByPositionId={orgChart.occupantByPositionId}
+              professionals={professionals.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+              canManage={hasPermission(actor, PERMISSIONS.STAFF_MANAGE)}
+            />
+          ) : null}
 
           {measurements ? (
             <MeasurementsSection projectId={project.id} rows={measurements.rows} summary={measurements.summary} />

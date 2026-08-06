@@ -1,4 +1,4 @@
-import { canReadProject } from "@/core/rbac/can";
+import { canReadContractValue, canReadProject } from "@/core/rbac/can";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { getAvailableActions, isSlaBreached, workflowProgress } from "@/core/workflow/engine";
 import type { AvailableAction, StageDef } from "@/core/workflow/types";
@@ -70,7 +70,8 @@ export interface ProjectListItem {
   name: string;
   client: string;
   location: string;
-  contractValue: number;
+  /** `null` quando o ator não tem `project:read:contract_value` (ex.: RH, Segurança). */
+  contractValue: number | null;
   plannedEndDate: Date;
   progressPercent: number;
   status: string;
@@ -162,6 +163,7 @@ export async function listProjects(
   const nextCursor = hasMore ? page[page.length - 1].id : null;
 
   const now = new Date();
+  const showContractValue = canReadContractValue(actor);
 
   const items: ProjectListItem[] = page
     .map((p) => {
@@ -174,7 +176,7 @@ export async function listProjects(
         name: p.name,
         client: p.client,
         location: p.location,
-        contractValue: Number(p.contractValue),
+        contractValue: showContractValue ? Number(p.contractValue) : null,
         plannedEndDate: p.plannedEndDate,
         progressPercent: p.progressPercent,
         status: p.status,
@@ -236,6 +238,25 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
 
   if (!project?.workflow) return null;
 
+  // Campos STAFF guardam o id do Profissional, não o nome — resolve pra exibição aqui,
+  // uma vez, em vez de espalhar essa tradução pelos componentes.
+  const professionalIds = new Set<string>();
+  for (const si of project.stageInstances) {
+    for (const fv of si.fieldValues) {
+      if (fv.field.type === "STAFF" && typeof fv.value === "string") professionalIds.add(fv.value);
+    }
+  }
+  const professionalsById = professionalIds.size
+    ? new Map(
+        (
+          await prisma.professional.findMany({
+            where: { id: { in: [...professionalIds] }, organizationId: actor.organizationId },
+            select: { id: true, name: true, role: true },
+          })
+        ).map((p) => [p.id, `${p.name} — ${p.role}`]),
+      )
+    : new Map<string, string>();
+
   const visitedDepartmentIds: string[] = [];
   const snapshot = await loadSnapshot(project.workflow.workflowVersionId);
 
@@ -285,7 +306,10 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
       values:
         last?.fieldValues.map((fv) => ({
           label: fv.field.label,
-          value: fv.value,
+          value:
+            fv.field.type === "STAFF" && typeof fv.value === "string"
+              ? (professionalsById.get(fv.value) ?? "Profissional removido do cadastro")
+              : fv.value,
           type: fv.field.type,
         })) ?? [],
     };
@@ -312,7 +336,7 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
       name: project.name,
       client: project.client,
       location: project.location,
-      contractValue: Number(project.contractValue),
+      contractValue: canReadContractValue(actor) ? Number(project.contractValue) : null,
       plannedStartDate: project.plannedStartDate,
       plannedEndDate: project.plannedEndDate,
       scopeSummary: project.scopeSummary,

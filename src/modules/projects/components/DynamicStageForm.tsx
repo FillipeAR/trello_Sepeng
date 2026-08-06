@@ -110,7 +110,7 @@ function Field({
         <select {...common} defaultValue="">
           <option value="">Selecione…</option>
           {professionals.map((p) => (
-            <option key={p.id} value={p.name}>
+            <option key={p.id} value={p.id}>
               {p.name} — {p.role}
             </option>
           ))}

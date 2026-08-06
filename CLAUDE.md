@@ -75,7 +75,7 @@ scripts/demo-inserir-etapa.ts ← prova que reconfigurar o fluxo não exige cód
 ```bash
 npx prisma dev --name obraflow   # Postgres local (deixe rodando em outro terminal)
 npm run dev
-npm test                         # 46 testes de engine e RBAC, sem banco
+npm test                         # 87 testes de engine, RBAC e organograma, sem banco
 npm run db:push                  # aplica o schema no dev
 npm run db:seed                  # semeia org, papéis, usuários e o fluxo
 npm run build
@@ -116,8 +116,9 @@ senha `obraflow123`.
 
 MVP completo e verificado ponta a ponta: auth, RBAC, engine versionado, fluxo de 8 etapas,
 cadastro de obra, formulários dinâmicos, esteira visual, fila do departamento, auditoria,
-notificações in-app, dashboards e visualização do fluxo. Build, lint, `tsc` e 46 testes
-passando.
+notificações in-app (e-mail via Resend pra seleção de profissional), dashboards, visualização
+do fluxo, gestão de usuários, organograma editável e Jornal Sepeng. Build, lint, `tsc` e 87
+testes passando.
 
 Existe um fluxo v2 no banco (com etapa Jurídico) criado pelo script de demonstração, e duas
 obras de exemplo.
@@ -276,9 +277,110 @@ sempre prefixando com `/obras` em vez de devolver string vazia quando não há f
 `listMyQueue` (fila de departamento, usa `listProjects` por baixo) não pagina — busca um
 lote generoso (`limit: 300`) de uma vez, contexto interno onde isso é aceitável.
 
+### Gestão de usuários (`/admin/usuarios`) — entregue
+
+Antes só existia um login compartilhado por setor (`orcamento@obraflow.com` etc.), semeado
+pelo `prisma/seed.ts` — não havia tela nenhuma pra criar mais contas. `PERMISSIONS.USER_MANAGE`
+já existia no catálogo (concedida só a `administrador`) mas nunca tinha sido usada por uma UI.
+`src/modules/users/` (commands: `createUser`/`updateUser`/`setUserActive`, hash de senha com
+`bcryptjs` — mesmo padrão do seed) segue exatamente o esqueleto de `staff/commands.ts` +
+`/admin/profissionais`. `setUserActive` desativa por `Membership.isActive`, nunca apaga o
+`User` (preserva histórico/auditoria já ligados a ele) — e um administrador não consegue
+desativar a própria conta. Cada setor agora pode ter quantas contas nomeadas quiser.
+
+### Valor de contrato restrito a Orçamento/Diretoria — entregue
+
+Primeiro padrão de **redação de campo** no código (não existia nenhum antes — `contractValue`
+sempre apareceu cru pra qualquer papel que lesse a obra). Nova
+`PERMISSIONS.PROJECT_READ_CONTRACT_VALUE`, concedida por padrão a `administrador`, `diretoria`
+e `orcamento`. `canReadContractValue` (`src/core/rbac/can.ts`) é checada em
+`src/modules/projects/queries.ts` (`listProjects`/`getProjectDetail`): sem a permissão,
+`contractValue` volta `null` em vez do valor — UI mostra "—" na listagem e "Restrito" no
+detalhe. **De propósito não mexe** em `measurements/queries.ts` (usa o valor de contrato bruto
+pra calcular o resumo de medição — % do contrato executado — pra Financeiro/Diretoria; redigir
+ali quebraria esse indicador sem ter sido pedido) nem no contexto de condição do engine
+(`executeStageAction` usa `Number(project.contractValue)` pra avaliar condições de transição
+de fluxo — é cálculo interno do sistema, não exibição).
+
+### E-mail ao selecionar um Profissional (STAFF) — entregue
+
+`Professional` ganhou `email` opcional (`/admin/profissionais`). Corrigido um problema de base
+pra isso funcionar: o campo `STAFF` (ex. "Gerente responsável" da etapa Diretoria) guardava
+o **nome** do profissional como string solta em `StageFieldValue.value` — frágil (nomes podem
+repetir ou mudar). Agora guarda o **id** (`DynamicStageForm.tsx`, só o `case "STAFF"` — `USER`
+continua como estava). `scripts/migrate-staff-field-values.ts` converteu os dados já
+existentes (casa por nome dentro da mesma organização, loga o que não achar). Pontos de
+exibição do valor (esteira da obra) resolvem o id de volta pra "Nome — Função" em
+`getProjectDetail` — a auditoria (`/obras/[id]/historico`) continua mostrando o valor bruto,
+de propósito (é um log técnico genérico, não vale a pena diferenciar por tipo de campo ali).
+
+Novo evento `DOMAIN_EVENTS.STAFF_ASSIGNED` ("staff.assigned"), enfileirado por
+`enqueueStaffAssignedEvent` (`src/modules/staff/notify.ts`) sempre que um campo STAFF muda de
+profissional em `executeStageAction`, ou uma atribuição de organograma muda (ver abaixo) — um
+helper único, dois pontos de disparo. Como `Professional` não tem login, esse evento **não**
+segue o fluxo genérico de `Notification` in-app (que exige `userId`): o dispatcher
+(`dispatchStaffAssignedEmail` em `src/modules/notifications/dispatcher.ts`) resolve o
+`professionalId` do payload e manda e-mail direto, sem passar pela preferência opt-in por
+usuário (que só existe pra quem tem conta) — se não tiver e-mail cadastrado, não faz nada.
+
+Infra de e-mail nova: `src/modules/notifications/email.ts` (`sendEmail`, mesmo formato do
+`whatsapp.ts`) via **Resend** (`npm install resend`, credencial `RESEND_API_KEY`). **Ainda não
+provisionado neste ambiente** — a Vercel CLI não estava instalada; provisionar com
+`vercel integration add resend` (categoria `messaging` do Marketplace) e `vercel env pull`
+antes de e-mails saírem de verdade em produção. Sem a credencial, o envio falha, o erro é
+logado e o evento mesmo assim é marcado `DONE` (mesmo padrão de "falha no WhatsApp não
+derruba o evento" que `dispatchWhatsApp` já tinha) — não existe retentativa nem fila
+travada por causa disso. Não precisou de cron novo: `processOutbox()` já roda de forma
+síncrona logo após cada ação (`obras/actions.ts`), então o aviso sai quase na hora.
+
+### Organograma editável — entregue
+
+Dois modelos novos: `OrgChartPosition` (template de cargos por organização, em árvore via
+`parentId` — auto-relacionamento) e `ProjectOrgChartAssignment` (quem ocupa cada cargo em
+cada obra). `/admin/organograma` (gated por `STAFF_MANAGE`, mesma permissão que já rege
+`/admin/profissionais` — sem permissão nova) edita o template: adicionar cargo (com "reporta
+a" opcional), renomear, mover entre irmãos, excluir — excluir não é em cascata, os filhos
+diretos sobem pro topo da árvore em vez de sumir junto. `assertNoCycle`
+(`src/modules/orgchart/commands.ts`) impede reatribuir um cargo pra debaixo de um dos seus
+próprios subordinados. `buildOrgChartTree`/`flattenWithDepth`
+(`src/modules/orgchart/tree.ts`, puro, testado) montam a árvore a partir da lista plana —
+reaproveitado tanto no editor quanto na exibição por obra.
+
+Nova seção "Organograma" na página da obra (`OrgChartSection.tsx`, ao lado de
+`TasksSection`/`CommentsSection`): a mesma árvore, com um dropdown de profissional por cargo
+pra quem tem `STAFF_MANAGE` (senão é só leitura). Trocar quem ocupa um cargo chama
+`assignPosition`, que enfileira o mesmo evento `staff.assigned` do campo STAFF (seção
+anterior) — um único caminho de e-mail pra "fui selecionado pra obra", venha de onde vier.
+**Aditivo**: não mexe nos campos STAFF já publicados na etapa Diretoria — consolidar os dois
+um dia seria uma nova versão de fluxo (draft + publish), fora do escopo agora.
+
+`scripts/seed-orgchart-template.ts` (opcional, idempotente) semeia uma estrutura de partida
+inspirada no organograma de referência da Sepeng (Diretores → Gerente de Contrato → Gerentes
+de área → departamentos) só pra não nascer vazio — os nomes de cargo são 100% editáveis
+depois pela própria tela, sem precisar de código.
+
+### Jornal Sepeng — entregue
+
+Aba "Jornal Sepeng" — primeira entrada da navegação, visível a todo mundo, sem gate de
+permissão pra leitura. Nova `PERMISSIONS.NEWS_MANAGE`, concedida por padrão a `administrador`
+e `diretoria`, exigida só pra publicar/editar/remover (`src/modules/news/`, mesmo padrão
+`commands.ts`/`queries.ts` dos outros módulos administráveis). Notícia é título + texto +
+imagem de capa opcional, via upload real pro Vercel Blob — mas com `access: "public"` (ao
+contrário dos anexos de obra, que são privados): é conteúdo institucional, não documento
+sensível, então a UI referencia a URL do blob direto no `<img>`, sem o proxy de download que
+`/api/anexos` usa. `/jornal` não pagina (`take: 30`), mesmo pragmatismo do resto do sistema
+pra listas que não costumam crescer descontroladamente.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
-escalonamento por SLA, paginação por cursor) estão entregues. Próximos candidatos,
-sem ordem definida: paginação/filtros mais ricos nas outras listagens (`/lembretes`,
-auditoria), export CSV/PDF, e o que a Sepeng priorizar no uso real.
+escalonamento por SLA, paginação por cursor) estão entregues, junto com uma segunda rodada:
+contas de usuário por setor, valor de contrato restrito, e-mail de seleção de profissional,
+organograma editável e Jornal Sepeng. **Pendências operacionais antes de ir pra produção**:
+rodar `scripts/sync-permissions.ts` (permissões novas: `user:manage` já existia mas nunca foi
+sincronizada pra valer, `project:read:contract_value`, `news:manage`), rodar
+`scripts/migrate-staff-field-values.ts` (converte STAFF de nome pra id nos dados já existentes)
+e provisionar o Resend (`vercel integration add resend` + `vercel env pull`) — sem isso o
+e-mail de seleção falha silenciosamente (loga erro, não quebra nada, só não envia). Próximos
+candidatos sem ordem definida: paginação/filtros mais ricos nas outras listagens
+(`/lembretes`, auditoria), export CSV/PDF, e o que a Sepeng priorizar no uso real.

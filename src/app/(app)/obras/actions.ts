@@ -27,6 +27,7 @@ import {
   updatePurchaseOrder,
 } from "@/modules/procurement/commands";
 import { processOutbox } from "@/modules/notifications/dispatcher";
+import { assignPosition } from "@/modules/orgchart/commands";
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
@@ -488,6 +489,25 @@ export async function deletePurchaseOrderAction(_prev: ActionState, formData: Fo
     return toState(error);
   }
 
+  revalidatePath(`/obras/${projectId}`);
+  return { success: true };
+}
+
+export async function assignOrgChartPositionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+
+  try {
+    await assignPosition(actor, {
+      projectId,
+      positionId: String(formData.get("positionId") ?? ""),
+      professionalId: String(formData.get("professionalId") ?? "") || null,
+    });
+  } catch (error) {
+    return toState(error);
+  }
+
+  await processOutbox();
   revalidatePath(`/obras/${projectId}`);
   return { success: true };
 }

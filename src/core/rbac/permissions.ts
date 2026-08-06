@@ -35,9 +35,11 @@ export const PERMISSIONS = {
   REPORT_READ: "report:read",
   COMMENT_CREATE: "comment:create",
   TASK_MANAGE: "task:manage",
+  NEWS_MANAGE: "news:manage",
 
   // Financeiro
   MEASUREMENT_MANAGE: "measurement:manage",
+  PROJECT_READ_CONTRACT_VALUE: "project:read:contract_value",
 
   // Compliance
   DOCUMENT_MANAGE: "document:manage",
@@ -73,7 +75,9 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.REPORT_READ, category: "Transversal", description: "Acessar relatórios e indicadores" },
   { key: PERMISSIONS.COMMENT_CREATE, category: "Transversal", description: "Comentar em obras e etapas" },
   { key: PERMISSIONS.TASK_MANAGE, category: "Transversal", description: "Criar e concluir pendências" },
+  { key: PERMISSIONS.NEWS_MANAGE, category: "Transversal", description: "Publicar notícias no Jornal Sepeng" },
   { key: PERMISSIONS.MEASUREMENT_MANAGE, category: "Financeiro", description: "Registrar e aprovar medições (orçamento vs. custo real)" },
+  { key: PERMISSIONS.PROJECT_READ_CONTRACT_VALUE, category: "Financeiro", description: "Ver o valor de contrato da obra" },
   { key: PERMISSIONS.DOCUMENT_MANAGE, category: "Compliance", description: "Gerenciar documentos com validade (ART/RRT, alvará, licença, seguro)" },
   { key: PERMISSIONS.PROCUREMENT_MANAGE, category: "Suprimentos", description: "Gerenciar fornecedores e pedidos de compra" },
 ];
@@ -116,6 +120,8 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.MEASUREMENT_MANAGE,
       PERMISSIONS.DOCUMENT_MANAGE,
       PERMISSIONS.PROCUREMENT_MANAGE,
+      PERMISSIONS.PROJECT_READ_CONTRACT_VALUE,
+      PERMISSIONS.NEWS_MANAGE,
     ],
   },
   {
@@ -131,6 +137,7 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.REPORT_READ,
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
+      PERMISSIONS.PROJECT_READ_CONTRACT_VALUE,
     ],
   },
   {

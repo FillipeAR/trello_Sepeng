@@ -29,6 +29,11 @@ export function hasAnyPermission(
   return permissions.some((p) => actor.permissions.includes(p));
 }
 
+/** Pode ver o valor de contrato da obra? Restrito por padrão a Orçamento/Diretoria/Admin. */
+export function canReadContractValue(actor: Actor): boolean {
+  return hasPermission(actor, PERMISSIONS.PROJECT_READ_CONTRACT_VALUE);
+}
+
 /**
  * Pode ver esta obra? Três escopos de leitura, do mais amplo ao mais restrito.
  * A ausência de qualquer um deles nega — não existe leitura implícita.

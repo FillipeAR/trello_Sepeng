@@ -158,7 +158,9 @@ export default async function ObrasPage({
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">{p.departmentName ?? "—"}</td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(p.contractValue)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {p.contractValue === null ? "—" : formatCurrency(p.contractValue)}
+                  </td>
                   <td className={`px-4 py-3 text-right ${p.isLate ? "text-warning" : ""}`}>
                     {formatDate(p.plannedEndDate)}
                     {p.isLate ? <div className="text-[11px]">em atraso</div> : null}

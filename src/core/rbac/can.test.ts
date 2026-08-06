@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canActOnStage, canReadProject, type Actor } from "./can";
+import { canActOnStage, canReadContractValue, canReadProject, type Actor } from "./can";
 import { DEFAULT_ROLES, PERMISSIONS } from "./permissions";
 
 function actor(over: Partial<Actor> = {}): Actor {
@@ -72,6 +72,23 @@ describe("canActOnStage", () => {
   it("workflow:manage ignora o departamento", () => {
     const a = actor({ permissions: [PERMISSIONS.WORKFLOW_MANAGE], departmentId: "x" });
     expect(canActOnStage(a, { stageDepartmentId: "dep-rh" }).allowed).toBe(true);
+  });
+});
+
+describe("canReadContractValue", () => {
+  it("nega sem a permissão", () => {
+    expect(canReadContractValue(actor())).toBe(false);
+  });
+
+  it("libera com project:read:contract_value", () => {
+    expect(canReadContractValue(actor({ permissions: [PERMISSIONS.PROJECT_READ_CONTRACT_VALUE] }))).toBe(true);
+  });
+
+  it("só administrador, diretoria e orçamento têm a permissão por padrão", () => {
+    const allowed = DEFAULT_ROLES.filter((r) => r.permissions.includes(PERMISSIONS.PROJECT_READ_CONTRACT_VALUE)).map(
+      (r) => r.slug,
+    );
+    expect(allowed.sort()).toEqual(["administrador", "diretoria", "orcamento"].sort());
   });
 });
 

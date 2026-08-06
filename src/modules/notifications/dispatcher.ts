@@ -4,6 +4,7 @@ import { DOMAIN_EVENTS, type DomainEventType } from "@/server/outbox";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { resolveChannelEnabled } from "@/core/notifications/preferences";
 import { sendWhatsAppMessage } from "./whatsapp";
+import { sendEmail } from "./email";
 
 /**
  * Worker do outbox. Entrega notificação in-app (sempre) e WhatsApp
@@ -37,6 +38,9 @@ interface EventPayload {
   rejectionReason?: string;
   documentType?: string;
   documentExpiresAt?: string;
+  /** staff.assigned — profissional (sem login) selecionado numa obra. */
+  professionalId?: string;
+  contextLabel?: string;
 }
 
 function describe(type: string, p: EventPayload): { title: string; body: string } {
@@ -201,6 +205,36 @@ async function dispatchWhatsApp(
   }
 }
 
+/**
+ * `staff.assigned` não segue o fluxo genérico acima: o destinatário é um
+ * `Professional` (sem login, sem `Notification` in-app possível) — o e-mail é
+ * a única entrega, sempre que houver endereço cadastrado, sem passar pela
+ * preferência opt-in por usuário (que só existe pra quem tem conta).
+ */
+async function dispatchStaffAssignedEmail(payload: EventPayload): Promise<void> {
+  if (!payload.professionalId) return;
+
+  const professional = await prisma.professional.findUnique({
+    where: { id: payload.professionalId },
+    select: { name: true, email: true },
+  });
+  if (!professional?.email) return;
+
+  const subject = `Você foi selecionado para a obra ${payload.projectName}`;
+  const html = `
+    <p>Olá, ${professional.name},</p>
+    <p>Você foi selecionado(a) como <strong>${payload.contextLabel ?? "responsável"}</strong>
+    na obra <strong>${payload.projectName}</strong> (${payload.projectCode}).</p>
+    <p>Este é um aviso informativo do ObraFlow — você não precisa acessar o sistema.</p>
+  `;
+
+  try {
+    await sendEmail(professional.email, subject, html);
+  } catch (error) {
+    console.error(`Falha ao enviar e-mail de seleção (profissional ${payload.professionalId}):`, error);
+  }
+}
+
 export async function processOutbox(limit = 50): Promise<number> {
   const events = await prisma.outboxEvent.findMany({
     where: { status: "PENDING", availableAt: { lte: new Date() } },
@@ -213,22 +247,27 @@ export async function processOutbox(limit = 50): Promise<number> {
   for (const event of events) {
     try {
       const payload = event.payload as unknown as EventPayload;
-      const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
-      const { title, body } = describe(event.type, payload);
 
-      if (recipients.length > 0) {
-        await prisma.notification.createMany({
-          data: recipients.map((userId) => ({
-            organizationId: event.organizationId,
-            userId,
-            type: event.type,
-            title,
-            body,
-            linkUrl: `/obras/${payload.projectId}`,
-          })),
-        });
+      if (event.type === DOMAIN_EVENTS.STAFF_ASSIGNED) {
+        await dispatchStaffAssignedEmail(payload);
+      } else {
+        const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
+        const { title, body } = describe(event.type, payload);
 
-        await dispatchWhatsApp(event.type as DomainEventType, recipients, title, body);
+        if (recipients.length > 0) {
+          await prisma.notification.createMany({
+            data: recipients.map((userId) => ({
+              organizationId: event.organizationId,
+              userId,
+              type: event.type,
+              title,
+              body,
+              linkUrl: `/obras/${payload.projectId}`,
+            })),
+          });
+
+          await dispatchWhatsApp(event.type as DomainEventType, recipients, title, body);
+        }
       }
 
       await prisma.outboxEvent.update({

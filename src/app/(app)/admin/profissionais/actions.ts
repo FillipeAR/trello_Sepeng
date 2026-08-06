@@ -35,6 +35,7 @@ function professionalDataFromForm(formData: FormData) {
     name: String(formData.get("name") ?? "").trim(),
     role: String(formData.get("role") ?? "").trim(),
     phone: String(formData.get("phone") ?? "").trim() || null,
+    email: String(formData.get("email") ?? "").trim() || null,
   };
 }
 

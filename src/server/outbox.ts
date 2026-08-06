@@ -20,6 +20,8 @@ export const DOMAIN_EVENTS = {
   MEASUREMENT_REJECTED: "measurement.rejected",
   DOCUMENT_EXPIRING_SOON: "document.expiring_soon",
   DOCUMENT_EXPIRED: "document.expired",
+  /** Profissional (STAFF) selecionado numa obra — campo de etapa ou organograma. */
+  STAFF_ASSIGNED: "staff.assigned",
 } as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];

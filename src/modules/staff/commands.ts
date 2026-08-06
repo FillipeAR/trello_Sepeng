@@ -24,6 +24,8 @@ const professionalSchema = z.object({
   name: z.string().min(2, "Informe o nome."),
   role: z.string().min(2, 'Informe a função (ex.: "Engenheiro civil", "Encarregado de obra").'),
   phone: z.string().optional().nullable(),
+  /** Opcional — se preenchido, o profissional recebe um e-mail ao ser selecionado numa obra. */
+  email: z.string().email("E-mail inválido.").optional().nullable().or(z.literal("")),
 });
 
 export type ProfessionalInput = z.infer<typeof professionalSchema>;
@@ -39,6 +41,7 @@ export async function createProfessional(actor: SessionContext, input: { data: u
         name: data.name,
         role: data.role,
         phone: data.phone || null,
+        email: data.email || null,
       },
     });
 
@@ -73,7 +76,7 @@ export async function updateProfessional(
 
     const updated = await tx.professional.update({
       where: { id: professional.id },
-      data: { name: data.name, role: data.role, phone: data.phone || null },
+      data: { name: data.name, role: data.role, phone: data.phone || null, email: data.email || null },
     });
 
     await writeAudit(tx, {

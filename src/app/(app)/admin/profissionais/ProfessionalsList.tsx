@@ -15,6 +15,7 @@ export interface ProfessionalData {
   name: string;
   role: string;
   phone: string | null;
+  email: string | null;
 }
 
 function ProfessionalRow({ professional }: { professional: ProfessionalData }) {
@@ -23,7 +24,7 @@ function ProfessionalRow({ professional }: { professional: ProfessionalData }) {
 
   return (
     <div className="rounded-lg border border-border p-3">
-      <form action={formAction} className="grid gap-2 sm:grid-cols-[2fr_2fr_1.2fr_auto]">
+      <form action={formAction} className="grid gap-2 sm:grid-cols-[1.8fr_1.8fr_1.4fr_1.6fr_auto]">
         <input type="hidden" name="professionalId" value={professional.id} />
         <input name="name" required defaultValue={professional.name} placeholder="Nome" className="input" />
         <input
@@ -34,6 +35,13 @@ function ProfessionalRow({ professional }: { professional: ProfessionalData }) {
           className="input"
         />
         <input name="phone" defaultValue={professional.phone ?? ""} placeholder="Telefone (opcional)" className="input" />
+        <input
+          name="email"
+          type="email"
+          defaultValue={professional.email ?? ""}
+          placeholder="E-mail (opcional)"
+          className="input"
+        />
         <button type="submit" disabled={pending} className="btn-ghost px-2 py-1 text-xs">
           {pending ? "Salvando…" : "Salvar"}
         </button>
@@ -76,16 +84,17 @@ function NewProfessionalForm() {
     <form
       ref={formRef}
       action={formAction}
-      className="grid gap-2 rounded-lg border border-dashed border-border p-3 sm:grid-cols-[2fr_2fr_1.2fr_auto]"
+      className="grid gap-2 rounded-lg border border-dashed border-border p-3 sm:grid-cols-[1.8fr_1.8fr_1.4fr_1.6fr_auto]"
     >
       <input name="name" required placeholder="Nome" className="input" />
       <input name="role" required placeholder='Função (ex.: "Encarregado de obra")' className="input" />
       <input name="phone" placeholder="Telefone (opcional)" className="input" />
+      <input name="email" type="email" placeholder="E-mail (opcional)" className="input" />
       <button type="submit" disabled={pending} className="btn-ghost px-2 py-1 text-xs">
         {pending ? "Adicionando…" : "Adicionar"}
       </button>
       {state.errors?.length ? (
-        <p className="text-xs text-danger sm:col-span-4">{state.errors.join(" ")}</p>
+        <p className="text-xs text-danger sm:col-span-5">{state.errors.join(" ")}</p>
       ) : null}
     </form>
   );

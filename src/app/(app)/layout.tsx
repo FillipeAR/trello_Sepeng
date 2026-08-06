@@ -8,9 +8,12 @@ import {
   ClipboardList,
   HardHat,
   LayoutGrid,
+  Network,
+  Newspaper,
   Plus,
   Search,
   Truck,
+  Users,
   Workflow,
 } from "lucide-react";
 import { requireActor } from "@/server/actor";
@@ -32,6 +35,7 @@ export default async function AppLayout({
     {
       title: "Principal",
       items: [
+        { href: "/jornal", label: "Jornal Sepeng", icon: <Newspaper strokeWidth={1.75} />, show: true },
         { href: "/dashboard", label: "Painel", icon: <LayoutGrid strokeWidth={1.75} />, show: true },
         { href: "/obras", label: "Obras", icon: <Building2 strokeWidth={1.75} />, show: true },
         {
@@ -59,10 +63,22 @@ export default async function AppLayout({
           show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
         },
         {
+          href: "/admin/organograma",
+          label: "Organograma",
+          icon: <Network strokeWidth={1.75} />,
+          show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
+        },
+        {
           href: "/admin/fornecedores",
           label: "Fornecedores",
           icon: <Truck strokeWidth={1.75} />,
           show: actor.permissions.includes(PERMISSIONS.PROCUREMENT_MANAGE),
+        },
+        {
+          href: "/admin/usuarios",
+          label: "Usuários",
+          icon: <Users strokeWidth={1.75} />,
+          show: actor.permissions.includes(PERMISSIONS.USER_MANAGE),
         },
       ],
     },

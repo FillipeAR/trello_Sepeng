@@ -8,6 +8,7 @@ import { prisma, type Tx } from "@/server/db";
 import { writeAudit } from "@/server/audit";
 import { DOMAIN_EVENTS, enqueueEvent } from "@/server/outbox";
 import { getActiveWorkflowVersionId, loadSnapshot } from "@/modules/workflow/snapshot";
+import { enqueueStaffAssignedEvent } from "@/modules/staff/notify";
 
 export class CommandError extends Error {
   constructor(
@@ -233,6 +234,16 @@ export async function executeStageAction(
     // 1. Persiste o que foi preenchido na etapa.
     for (const field of currentStage.fields) {
       if (!(field.key in input.fieldValues)) continue;
+      const newValue = input.fieldValues[field.key] ?? null;
+
+      let previous: { value: unknown } | null = null;
+      if (field.type === "STAFF") {
+        previous = await tx.stageFieldValue.findUnique({
+          where: { stageInstanceId_fieldId: { stageInstanceId: currentInstance.id, fieldId: field.id } },
+          select: { value: true },
+        });
+      }
+
       await tx.stageFieldValue.upsert({
         where: {
           stageInstanceId_fieldId: {
@@ -244,10 +255,25 @@ export async function executeStageAction(
           organizationId: actor.organizationId,
           stageInstanceId: currentInstance.id,
           fieldId: field.id,
-          value: (input.fieldValues[field.key] ?? null) as never,
+          value: newValue as never,
         },
-        update: { value: (input.fieldValues[field.key] ?? null) as never },
+        update: { value: newValue as never },
       });
+
+      // Profissional novo (ou trocado) num campo STAFF avisa por e-mail — ver
+      // enqueueStaffAssignedEvent. Só dispara quando o valor muda de verdade,
+      // pra não reenviar aviso toda vez que a etapa é resalva sem mexer nele.
+      if (field.type === "STAFF" && typeof newValue === "string" && newValue !== previous?.value) {
+        await enqueueStaffAssignedEvent(tx, {
+          organizationId: actor.organizationId,
+          professionalId: newValue,
+          projectId: project.id,
+          projectName: project.name,
+          projectCode: project.code,
+          contextLabel: field.label,
+          idempotencyKey: `${DOMAIN_EVENTS.STAFF_ASSIGNED}:${currentInstance.id}:${field.id}:${newValue}`,
+        });
+      }
     }
 
     // 2. Fecha a etapa atual.
