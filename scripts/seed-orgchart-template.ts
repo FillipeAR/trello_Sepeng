@@ -1,11 +1,13 @@
 /**
- * Semeia uma estrutura inicial de cargos no organograma (`/admin/organograma`),
- * só pra não nascer vazio — formato inspirado no organograma de referência da
- * Sepeng (Diretores → Gerente de Contrato → Gerentes de área → chefias de
- * departamento). Nomes de cargo são só um ponto de partida: 100% editável
- * depois pela própria tela, sem precisar de código.
+ * Semeia a estrutura de cargos do organograma (`/admin/organograma`) com o
+ * formato e os títulos do organograma de referência da Sepeng/BYD que a
+ * empresa mandou — só a estrutura e os cargos, sem nomear as pessoas (elas
+ * são atribuídas depois, por obra, na própria tela). Nomes de cargo
+ * continuam 100% editáveis por ali, sem precisar de código.
  *
- * Idempotente: pula cargos cujo título já existe na organização.
+ * Idempotente: pula cargos cujo título já existe na organização (casando
+ * pelo primeiro encontrado, sem checar o pai — rodar mais de uma vez não
+ * duplica, mas também não corrige um cargo que já foi movido manualmente).
  *
  * Uso: npx tsx scripts/seed-orgchart-template.ts
  */
@@ -53,26 +55,42 @@ async function main() {
       return existing.id;
     }
     const created = await createPosition(actor, { data: { title, parentId } });
+    existingTitles.add(title);
     console.log(`  + "${title}"${parentId ? "" : " (raiz)"}`);
     return created.id;
   }
 
-  const diretor1 = await ensure("Diretor", null);
-  await ensure("Diretor", null);
-  await ensure("Diretor", null);
+  // `ensure` deduplica por título — não serve pra criar 3 irmãos com o mesmo
+  // nome ("Diretor"). Conta quantos já existem na raiz e completa até 3.
+  const existingDiretores = await prisma.orgChartPosition.findMany({
+    where: { organizationId: org.id, title: "Diretor", parentId: null, deletedAt: null },
+  });
+  let diretor1 = existingDiretores[0]?.id ?? null;
+  for (let i = existingDiretores.length; i < 3; i++) {
+    const created = await createPosition(actor, { data: { title: "Diretor", parentId: null } });
+    diretor1 ??= created.id;
+    console.log(`  + "Diretor" (raiz)`);
+  }
+  if (!diretor1) throw new Error("Falha ao criar/encontrar o cargo raiz Diretor.");
 
   const gerenteContrato = await ensure("Gerente de Contrato", diretor1);
   const gerenteProducao = await ensure("Gerente de Produção", gerenteContrato);
   const gerenteEngenharia = await ensure("Gerente de Engenharia", gerenteContrato);
 
-  await ensure("Segurança do Trabalho", gerenteProducao);
-  await ensure("Projetos", gerenteProducao);
+  await ensure("Estagiário de Engenharia", gerenteProducao);
+  const seguranca = await ensure("Segurança do Trabalho", gerenteProducao);
+  await ensure("Engenheiro de Segurança", seguranca);
+  await ensure("Supervisora", seguranca);
+  const projetos = await ensure("Projetos", gerenteProducao);
+  await ensure("Coordenador de Projeto", projetos);
 
-  await ensure("Qualidade", gerenteEngenharia);
+  const qualidade = await ensure("Qualidade", gerenteEngenharia);
+  await ensure("Engenheiro Civil - Qualidade", qualidade);
   await ensure("Planejamento", gerenteEngenharia);
   await ensure("Custos e Medição", gerenteEngenharia);
+  await ensure("ADM de Obra", gerenteEngenharia);
 
-  console.log("\n✔ Estrutura inicial do organograma pronta. Edite livremente em /admin/organograma.");
+  console.log("\n✔ Estrutura do organograma pronta (sem pessoas atribuídas). Edite em /admin/organograma.");
 }
 
 main()
