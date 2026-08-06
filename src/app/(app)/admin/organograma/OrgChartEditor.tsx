@@ -2,6 +2,7 @@
 
 import { useActionState, useRef } from "react";
 import { buildOrgChartTree, flattenWithDepth, type FlatPosition, type OrgChartTreeNode } from "@/modules/orgchart/tree";
+import { OrgChartDiagram } from "@/modules/orgchart/OrgChartDiagram";
 import {
   createPositionAction,
   deletePositionAction,
@@ -152,22 +153,38 @@ export function OrgChartEditor({ positions }: { positions: FlatPosition[] }) {
   }));
 
   return (
-    <div className="card space-y-4 p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-        Cargos ({positions.length})
-      </h2>
+    <div className="space-y-6">
+      {tree.length > 0 ? (
+        <div className="card p-5">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Como está hoje</h2>
+          <OrgChartDiagram
+            nodes={tree}
+            renderBox={(node) => (
+              <div key={node.id} className="orgchart-box font-medium">
+                {node.title}
+              </div>
+            )}
+          />
+        </div>
+      ) : null}
 
-      {tree.length === 0 ? (
-        <p className="text-sm text-muted">Nenhum cargo cadastrado ainda — comece adicionando os diretores.</p>
-      ) : (
-        <ul className="space-y-2">
-          {tree.map((node) => (
-            <PositionNode key={node.id} node={node} depth={0} parentOptions={parentOptions} />
-          ))}
-        </ul>
-      )}
+      <div className="card space-y-4 p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Cargos ({positions.length})
+        </h2>
 
-      <NewPositionForm parentOptions={parentOptions} />
+        {tree.length === 0 ? (
+          <p className="text-sm text-muted">Nenhum cargo cadastrado ainda — comece adicionando os diretores.</p>
+        ) : (
+          <ul className="space-y-2">
+            {tree.map((node) => (
+              <PositionNode key={node.id} node={node} depth={0} parentOptions={parentOptions} />
+            ))}
+          </ul>
+        )}
+
+        <NewPositionForm parentOptions={parentOptions} />
+      </div>
     </div>
   );
 }
