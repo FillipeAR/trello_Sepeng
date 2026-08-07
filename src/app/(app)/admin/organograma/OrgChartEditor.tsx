@@ -1,7 +1,13 @@
 "use client";
 
 import { useActionState, useRef } from "react";
-import { buildOrgChartTree, flattenWithDepth, type FlatPosition, type OrgChartTreeNode } from "@/modules/orgchart/tree";
+import {
+  buildOrgChartTree,
+  flattenWithDepth,
+  orgChartBoxClassName,
+  type FlatPosition,
+  type OrgChartTreeNode,
+} from "@/modules/orgchart/tree";
 import { OrgChartDiagram } from "@/modules/orgchart/OrgChartDiagram";
 import {
   createPositionAction,
@@ -159,8 +165,8 @@ export function OrgChartEditor({ positions }: { positions: FlatPosition[] }) {
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Como está hoje</h2>
           <OrgChartDiagram
             nodes={tree}
-            renderBox={(node) => (
-              <div key={node.id} className="orgchart-box font-medium">
+            renderBox={(node, depth) => (
+              <div key={node.id} className={orgChartBoxClassName(depth)}>
                 {node.title}
               </div>
             )}

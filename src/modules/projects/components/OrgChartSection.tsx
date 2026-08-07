@@ -2,7 +2,12 @@
 
 import { useActionState } from "react";
 import { assignOrgChartPositionAction, type ActionState } from "@/app/(app)/obras/actions";
-import { buildOrgChartTree, type FlatPosition, type OrgChartTreeNode } from "@/modules/orgchart/tree";
+import {
+  buildOrgChartTree,
+  orgChartBoxClassName,
+  type FlatPosition,
+  type OrgChartTreeNode,
+} from "@/modules/orgchart/tree";
 import { OrgChartDiagram } from "@/modules/orgchart/OrgChartDiagram";
 
 const initial: ActionState = {};
@@ -22,12 +27,14 @@ export interface ProfessionalOption {
 function PositionBox({
   projectId,
   node,
+  depth,
   occupant,
   professionals,
   canManage,
 }: {
   projectId: string;
   node: OrgChartTreeNode;
+  depth: number;
   occupant: OrgChartOccupant | null;
   professionals: ProfessionalOption[];
   canManage: boolean;
@@ -35,7 +42,7 @@ function PositionBox({
   const [state, formAction, pending] = useActionState(assignOrgChartPositionAction, initial);
 
   return (
-    <div className="orgchart-box space-y-1">
+    <div className={`${orgChartBoxClassName(depth)} space-y-1`}>
       <div className="font-semibold">{node.title}</div>
 
       {canManage ? (
@@ -97,11 +104,12 @@ export function OrgChartSection({
       ) : (
         <OrgChartDiagram
           nodes={tree}
-          renderBox={(node) => (
+          renderBox={(node, depth) => (
             <PositionBox
               key={node.id}
               projectId={projectId}
               node={node}
+              depth={depth}
               occupant={occupantByPositionId[node.id] ?? null}
               professionals={professionals}
               canManage={canManage}

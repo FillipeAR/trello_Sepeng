@@ -34,6 +34,18 @@ export function buildOrgChartTree(positions: FlatPosition[]): OrgChartTreeNode[]
   return roots;
 }
 
+/**
+ * Classe CSS da caixa do diagrama por nível — mesmo critério nos dois lugares
+ * que desenham o organograma (editor e seção da obra), pra não divergir.
+ * Baseado em profundidade, não no título (cargos são livremente editáveis,
+ * não dá pra amarrar estilo a um nome específico).
+ */
+export function orgChartBoxClassName(depth: number): string {
+  if (depth <= 2) return "orgchart-box--exec";
+  if (depth === 3) return "orgchart-box--dept";
+  return "orgchart-box";
+}
+
 /** Lista achatada em pré-ordem, com profundidade — pra montar um <select> indentado. */
 export function flattenWithDepth(nodes: OrgChartTreeNode[], depth = 0): { node: OrgChartTreeNode; depth: number }[] {
   return nodes.flatMap((node) => [

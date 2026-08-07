@@ -11,7 +11,8 @@ export function OrgChartDiagram({
   renderBox,
 }: {
   nodes: OrgChartTreeNode[];
-  renderBox: (node: OrgChartTreeNode) => ReactNode;
+  /** `depth` conta a partir de 0 (raiz) — usado pra estilizar por nível (executivo/depto/cargo). */
+  renderBox: (node: OrgChartTreeNode, depth: number) => ReactNode;
 }) {
   if (nodes.length === 0) return null;
 
@@ -19,7 +20,7 @@ export function OrgChartDiagram({
     <div className="overflow-x-auto pb-2">
       <ul className="orgchart-tree w-max min-w-full">
         {nodes.map((node) => (
-          <OrgChartDiagramNode key={node.id} node={node} renderBox={renderBox} />
+          <OrgChartDiagramNode key={node.id} node={node} depth={0} renderBox={renderBox} />
         ))}
       </ul>
     </div>
@@ -28,18 +29,20 @@ export function OrgChartDiagram({
 
 function OrgChartDiagramNode({
   node,
+  depth,
   renderBox,
 }: {
   node: OrgChartTreeNode;
-  renderBox: (node: OrgChartTreeNode) => ReactNode;
+  depth: number;
+  renderBox: (node: OrgChartTreeNode, depth: number) => ReactNode;
 }) {
   return (
     <li>
-      {renderBox(node)}
+      {renderBox(node, depth)}
       {node.children.length > 0 ? (
         <ul>
           {node.children.map((child) => (
-            <OrgChartDiagramNode key={child.id} node={child} renderBox={renderBox} />
+            <OrgChartDiagramNode key={child.id} node={child} depth={depth + 1} renderBox={renderBox} />
           ))}
         </ul>
       ) : null}

@@ -17,6 +17,9 @@
   --sidebar-from: #071126;
   --sidebar-via: #0b1730;
   --sidebar-to: #111c3d;
+  /* Organograma — teal da marca Sepeng, só usado ali (não é o --primary do resto do app). */
+  --orgchart-accent: #0d9488;
+  --orgchart-accent-foreground: #ffffff;
 }
 
 @theme inline {
@@ -48,6 +51,8 @@
     --warning: #fbbf24;
     --danger: #f87171;
     --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.25);
+    --orgchart-accent: #2dd4bf;
+    --orgchart-accent-foreground: #04302b;
   }
 }
 
@@ -130,13 +135,13 @@ body {
     right: 50%;
     width: 50%;
     height: 28px;
-    border-top: 2px solid var(--border);
+    border-top: 2.5px solid var(--orgchart-accent);
   }
 
   .orgchart-tree li::after {
     right: auto;
     left: 50%;
-    border-left: 2px solid var(--border);
+    border-left: 2.5px solid var(--orgchart-accent);
   }
 
   .orgchart-tree li:only-child {
@@ -154,12 +159,12 @@ body {
   }
 
   .orgchart-tree li:last-child::before {
-    border-right: 2px solid var(--border);
-    border-radius: 0 6px 0 0;
+    border-right: 2.5px solid var(--orgchart-accent);
+    border-radius: 0 10px 0 0;
   }
 
   .orgchart-tree li:first-child::after {
-    border-radius: 6px 0 0 0;
+    border-radius: 10px 0 0 0;
   }
 
   .orgchart-tree ul::before {
@@ -169,11 +174,30 @@ body {
     left: 50%;
     width: 0;
     height: 28px;
-    border-left: 2px solid var(--border);
+    border-left: 2.5px solid var(--orgchart-accent);
   }
 
+  /* Caixa padrão (nível "cargo" — folha da árvore, ex.: Supervisora). */
   .orgchart-box {
     @apply rounded-lg border border-border bg-surface px-3 py-2 text-center text-xs shadow-sm;
+    min-width: 130px;
+    max-width: 190px;
+  }
+
+  /* Nível "executivo" (Diretor, Gerente de Contrato/Produção/Engenharia) — pílula, como no
+     organograma de referência da Sepeng. */
+  .orgchart-box--exec {
+    @apply rounded-full border-2 bg-surface px-4 py-2 text-center text-xs font-semibold shadow-sm;
+    border-color: var(--orgchart-accent);
+    min-width: 150px;
+    max-width: 210px;
+  }
+
+  /* Nível "departamento" (Segurança do Trabalho, Qualidade, etc.) — selo sólido teal. */
+  .orgchart-box--dept {
+    @apply rounded-full px-3.5 py-1.5 text-center text-xs font-semibold shadow-sm;
+    background: var(--orgchart-accent);
+    color: var(--orgchart-accent-foreground);
     min-width: 130px;
     max-width: 190px;
   }
