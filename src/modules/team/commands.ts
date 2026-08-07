@@ -8,6 +8,7 @@ import { CommandError } from "@/modules/projects/commands";
 import { enqueueStaffAssignedEvent } from "@/modules/staff/notify";
 import { wouldCreateCycle, type FlatTeamPosition } from "./tree";
 import { TEAM_POSITION_PERMISSIONS } from "./permissions-catalog";
+import type { TeamPositionTemplateNode } from "./templates";
 
 /**
  * Estrutura da equipe de uma obra (tela "Equipe da obra") — cada obra tem a
@@ -316,4 +317,31 @@ export async function assignProfessional(
 
     return updated;
   });
+}
+
+/**
+ * Aplica um template pronto (ex.: `SEPENG_DEFAULT_TEMPLATE`) na obra — cria os
+ * cargos de verdade via `createPosition`, um por um, mantendo a hierarquia.
+ * É só um ponto de partida: os cargos criados ficam 100% editáveis depois,
+ * igual a qualquer outro criado à mão.
+ */
+export async function applyTemplate(
+  actor: SessionContext,
+  input: { projectId: string; template: TeamPositionTemplateNode[] },
+) {
+  requireManage(actor);
+
+  async function createNode(node: TeamPositionTemplateNode, parentId: string | null) {
+    const created = await createPosition(actor, {
+      projectId: input.projectId,
+      data: { title: node.title, sector: node.sector ?? null, parentId, permissions: [] },
+    });
+    for (const child of node.children ?? []) {
+      await createNode(child, created.id);
+    }
+  }
+
+  for (const root of input.template) {
+    await createNode(root, null);
+  }
 }

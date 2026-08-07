@@ -396,6 +396,22 @@ nós que não são raiz) reaproveitam a mesma árvore. Fora do escopo desta roda
 botão "Exportar" (sem formato definido), responsivo com drawers em mobile/tablet (mockup
 prioriza desktop), colapsar nó individual (só "tudo" por enquanto).
 
+**Template pronto** (`src/modules/team/templates.ts` → `SEPENG_DEFAULT_TEMPLATE`): botão
+"Usar organograma padrão" no canvas cria de uma vez a estrutura do organograma de referência
+da Sepeng/BYD (3× Diretor → Gerente de Contrato → Gerente de Produção/Engenharia →
+departamentos → sub-cargos, 19 cargos) numa obra, via `applyTemplate`
+(`src/modules/team/commands.ts`) — chama `createPosition` de verdade pra cada nó, então o
+resultado é exatamente como ter criado à mão: 100% editável depois. Se a obra já tiver
+cargos, confirma antes (soma por cima, não apaga o que já existe).
+
+**Campos redundantes removidos da etapa Diretoria de vez**: "Gerente responsável",
+"Encarregado responsável" e "Equipe necessária" saíram do formulário da etapa
+(`scripts/remove-diretoria-team-fields.ts`, mesmo padrão de draft+publish das migrations de
+fluxo anteriores) — a Equipe da Obra é agora o único lugar que registra quem faz parte do
+time, e fica visível (leitura, sem precisar de `staff:manage`) pra qualquer um que possa ler
+a obra, em qualquer etapa do fluxo — não só a Diretoria. "Quantidade de funcionários" e
+"Recursos necessários" continuam no formulário (não são sobre "quem", são planejamento).
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,

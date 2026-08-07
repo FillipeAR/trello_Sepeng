@@ -8,6 +8,7 @@ import { CommandError } from "@/modules/projects/commands";
 import { createProfessional, updateProfessional } from "@/modules/staff/commands";
 import { processOutbox } from "@/modules/notifications/dispatcher";
 import {
+  applyTemplate,
   assignProfessional,
   createPosition,
   deletePosition,
@@ -16,6 +17,7 @@ import {
   updatePosition,
 } from "@/modules/team/commands";
 import { TEAM_POSITION_PERMISSIONS } from "@/modules/team/permissions-catalog";
+import { SEPENG_DEFAULT_TEMPLATE } from "@/modules/team/templates";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
@@ -79,6 +81,18 @@ export async function updatePositionAction(_prev: ActionState, formData: FormDat
         permissions: permissionsFromForm(formData),
       },
     });
+  } catch (error) {
+    return toState(error);
+  }
+  revalidatePath(`/obras/${projectId}/equipe`);
+  return { success: true };
+}
+
+export async function applyTemplateAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  const projectId = String(formData.get("projectId") ?? "");
+  try {
+    await applyTemplate(actor, { projectId, template: SEPENG_DEFAULT_TEMPLATE });
   } catch (error) {
     return toState(error);
   }

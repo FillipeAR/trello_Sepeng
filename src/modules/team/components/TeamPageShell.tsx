@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { LayoutGrid, List, Rows3 } from "lucide-react";
+import { useActionState, useCallback, useRef, useState } from "react";
+import { LayoutGrid, List, Rows3, Sparkles } from "lucide-react";
 import { buildTeamTree, type FlatTeamPosition } from "../tree";
 import type { TeamOccupant, TeamProfessional } from "../queries";
 import { TeamCanvas } from "./TeamCanvas";
@@ -10,7 +10,43 @@ import { PeoplePanel } from "./PeoplePanel";
 import { PositionInspector } from "./PositionInspector";
 import { NewPositionModal } from "./NewPositionModal";
 import { NewPersonModal } from "./NewPersonModal";
-import { assignProfessionalDirect } from "@/app/(app)/obras/[id]/equipe/actions";
+import {
+  applyTemplateAction,
+  assignProfessionalDirect,
+  type ActionState,
+} from "@/app/(app)/obras/[id]/equipe/actions";
+
+const initialActionState: ActionState = {};
+
+function ApplyTemplateButton({ projectId, hasPositions }: { projectId: string; hasPositions: boolean }) {
+  const [state, formAction, pending] = useActionState(applyTemplateAction, initialActionState);
+
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="projectId" value={projectId} />
+      <button
+        type="submit"
+        disabled={pending}
+        onClick={(e) => {
+          if (
+            hasPositions &&
+            !window.confirm(
+              "Já existem cargos nesta obra. Aplicar o template padrão da Sepeng adiciona os cargos dele por cima, sem apagar os que já existem. Continuar?",
+            )
+          ) {
+            e.preventDefault();
+          }
+        }}
+        className="btn-ghost gap-1.5 text-xs"
+        title="Cria a estrutura padrão da Sepeng (Diretor → Gerente de Contrato → gerências → departamentos)"
+      >
+        <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} />
+        {pending ? "Aplicando…" : "Usar organograma padrão"}
+      </button>
+      {state.errors?.length ? <p className="mt-1 text-xs text-danger">{state.errors.join(" ")}</p> : null}
+    </form>
+  );
+}
 
 export function TeamPageShell({
   projectId,
@@ -88,6 +124,7 @@ export function TeamPageShell({
                 {collapseAll ? "Expandir tudo" : "Recolher tudo"}
               </button>
             ) : null}
+            {canManage ? <ApplyTemplateButton projectId={projectId} hasPositions={positions.length > 0} /> : null}
             {canManage ? (
               <button type="button" onClick={() => setNewPositionOpen(true)} className="btn-primary text-xs">
                 + Adicionar função
