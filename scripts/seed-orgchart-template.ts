@@ -77,7 +77,6 @@ async function main() {
   const gerenteProducao = await ensure("Gerente de Produção", gerenteContrato);
   const gerenteEngenharia = await ensure("Gerente de Engenharia", gerenteContrato);
 
-  await ensure("Estagiário de Engenharia", gerenteProducao);
   const seguranca = await ensure("Segurança do Trabalho", gerenteProducao);
   await ensure("Engenheiro de Segurança", seguranca);
   await ensure("Supervisora", seguranca);
@@ -86,9 +85,12 @@ async function main() {
 
   const qualidade = await ensure("Qualidade", gerenteEngenharia);
   await ensure("Engenheiro Civil - Qualidade", qualidade);
-  await ensure("Planejamento", gerenteEngenharia);
-  await ensure("Custos e Medição", gerenteEngenharia);
-  await ensure("ADM de Obra", gerenteEngenharia);
+  const planejamento = await ensure("Planejamento", gerenteEngenharia);
+  await ensure("Coordenador de Planejamento", planejamento);
+  const custosMedicao = await ensure("Custos e Medição", gerenteEngenharia);
+  await ensure("Engenheiro", custosMedicao);
+  const admObra = await ensure("ADM de Obra", gerenteEngenharia);
+  await ensure("Funcionário", admObra);
 
   console.log("\n✔ Estrutura do organograma pronta (sem pessoas atribuídas). Edite em /admin/organograma.");
 }
