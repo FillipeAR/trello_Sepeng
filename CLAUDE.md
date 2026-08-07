@@ -75,7 +75,7 @@ scripts/demo-inserir-etapa.ts ← prova que reconfigurar o fluxo não exige cód
 ```bash
 npx prisma dev --name obraflow   # Postgres local (deixe rodando em outro terminal)
 npm run dev
-npm test                         # 83 testes de engine e RBAC, sem banco
+npm test                         # 93 testes de engine, RBAC e equipe da obra, sem banco
 npm run db:push                  # aplica o schema no dev
 npm run db:seed                  # semeia org, papéis, usuários e o fluxo
 npm run build
@@ -117,7 +117,8 @@ senha `obraflow123`.
 MVP completo e verificado ponta a ponta: auth, RBAC, engine versionado, fluxo de 8 etapas,
 cadastro de obra, formulários dinâmicos, esteira visual, fila do departamento, auditoria,
 notificações in-app (e-mail via Resend pra seleção de profissional), dashboards, visualização
-do fluxo, gestão de usuários e Jornal Sepeng. Build, lint, `tsc` e 83 testes passando.
+do fluxo, gestão de usuários, Jornal Sepeng e Estrutura da Equipe da Obra (canvas com
+drag-and-drop). Build, lint, `tsc` e 93 testes passando.
 
 Existe um fluxo v2 no banco (com etapa Jurídico) criado pelo script de demonstração, e duas
 obras de exemplo.
@@ -359,14 +360,51 @@ sensível, então a UI referencia a URL do blob direto no `<img>`, sem o proxy d
 `/api/anexos` usa. `/jornal` não pagina (`take: 30`), mesmo pragmatismo do resto do sistema
 pra listas que não costumam crescer descontroladamente.
 
+### Estrutura da Equipe da Obra — entregue
+
+Segunda tentativa de organograma depois da que foi revertida (seção acima) — desta vez por
+**obra** (não é template compartilhado) e com canvas de arrastar-e-soltar de verdade, em
+`/obras/[id]/equipe`. Primeira lib de canvas/DnD do projeto: `@xyflow/react` (React Flow) —
+só pro motor (posição/pan/zoom/edges/mini-mapa); o nó é 100% customizado
+(`PositionNode.tsx`) com as classes e tokens já existentes (`.card`, `--primary`, `--border`
+etc.), tema do canvas em `globals.css` (`.team-canvas`) mapeando as variáveis `--xy-*` do
+React Flow pros tokens do app — sem cor nova.
+
+Modelo `TeamPosition` (`src/modules/team/`): árvore via `parentId`, cada obra com a própria
+estrutura. "Nível hierárquico" do inspetor **não é campo** — é sempre a profundidade
+calculada na árvore (`flattenWithDepth`), pra não abrir brecha de inconsistência com o pai
+real. `permissions` (checklist "Financeiro", "Documentos" etc.) é só exibição — não bloqueia
+nada, RBAC real continua sendo só por papel. `Professional` ganhou `avatarUrl`/`company`/
+`area` pro modal de pessoa; a tela antiga `/admin/profissionais` não edita esses três campos,
+então carrega os valores atuais em campos ocultos ao salvar, pra não zerar o que foi
+preenchido na tela nova (achado durante a implementação — sem isso, salvar por
+`/admin/profissionais` apagava foto/empresa/área de quem já tinha).
+
+Interações do canvas: arrastar pessoa do painel direito solta no cargo (Drag and Drop HTML5
+nativo, sem lib extra — mesmo truque que os exemplos oficiais do React Flow usam pra
+"sidebar → canvas"); arrastar uma conexão de um cargo pra outro reatribui o "Superior"
+(`onConnect`, valida ciclo no cliente com `wouldCreateCycle` e de novo no servidor); mover um
+nó persiste a posição (`positionX`/`positionY`) ao soltar. **Achado que se repetiu de uma
+feature anterior** (o mesmo bug do seletor do organograma removido): manter `nodes`/`edges`
+do React Flow sincronizados com os dados do servidor via `useEffect` + `setState` dispara o
+lint (`react-hooks/set-state-in-effect`) e é o padrão errado — a correção foi computar uma
+`key` a partir do conteúdo de `positions` (`TeamCanvas`) e deixar o React remontar
+`TeamCanvasInner` do zero quando o dado muda de verdade, em vez de sincronizar por efeito.
+
+Toggle "Organograma"/"Lista" (`TeamListView.tsx`, tabela simples) e "Recolher tudo" (esconde
+nós que não são raiz) reaproveitam a mesma árvore. Fora do escopo desta rodada, de propósito:
+botão "Exportar" (sem formato definido), responsivo com drawers em mobile/tablet (mockup
+prioriza desktop), colapsar nó individual (só "tudo" por enquanto).
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
 escalonamento por SLA, paginação por cursor) estão entregues, junto com uma segunda rodada:
-contas de usuário por setor, valor de contrato restrito, e-mail de seleção de profissional e
-Jornal Sepeng (organograma foi tentado e revertido — ver seção acima). `RESEND_API_KEY` já
-está provisionado (Produção e Preview) e testado com envio real — falta só `EMAIL_FROM` com
-um domínio verificado na Resend pra sair de "só entrega em endereço de teste" pra "entrega em
-qualquer profissional real". Próximos candidatos sem ordem definida: paginação/filtros mais
-ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF, e o que a Sepeng
-priorizar no uso real.
+contas de usuário por setor, valor de contrato restrito, e-mail de seleção de profissional,
+Jornal Sepeng e Estrutura da Equipe da Obra (a primeira tentativa de organograma foi revertida
+— ver seção correspondente acima; a segunda, por obra e com drag-and-drop, é a que ficou).
+`RESEND_API_KEY` já está provisionado (Produção e Preview) e testado com envio real — falta
+só `EMAIL_FROM` com um domínio verificado na Resend pra sair de "só entrega em endereço de
+teste" pra "entrega em qualquer profissional real". Próximos candidatos sem ordem definida:
+paginação/filtros mais ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF
+da equipe da obra, e o que a Sepeng priorizar no uso real.

@@ -58,6 +58,9 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href={`/obras/${project.id}/equipe`} className="btn-ghost text-xs">
+            Equipe da obra
+          </Link>
           <Link href={`/obras/${project.id}/historico`} className="btn-ghost text-xs">
             Histórico completo
           </Link>

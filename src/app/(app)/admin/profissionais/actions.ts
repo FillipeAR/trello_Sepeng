@@ -36,6 +36,11 @@ function professionalDataFromForm(formData: FormData) {
     role: String(formData.get("role") ?? "").trim(),
     phone: String(formData.get("phone") ?? "").trim() || null,
     email: String(formData.get("email") ?? "").trim() || null,
+    // Esta tela não edita empresa/área/foto (isso é da tela "Equipe da obra") — carrega
+    // os valores atuais via campo oculto pra não apagar o que já foi preenchido lá.
+    company: String(formData.get("existingCompany") ?? "").trim() || null,
+    area: String(formData.get("existingArea") ?? "").trim() || null,
+    avatarUrl: String(formData.get("existingAvatarUrl") ?? "").trim() || null,
   };
 }
 

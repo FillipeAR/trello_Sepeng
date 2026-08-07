@@ -26,6 +26,12 @@ const professionalSchema = z.object({
   phone: z.string().optional().nullable(),
   /** Opcional — se preenchido, o profissional recebe um e-mail ao ser selecionado numa obra. */
   email: z.string().email("E-mail inválido.").optional().nullable().or(z.literal("")),
+  /** Subcontratada, quando não é da própria Sepeng. */
+  company: z.string().optional().nullable(),
+  /** Categoria livre pro filtro do painel de pessoas da tela Equipe da Obra. */
+  area: z.string().optional().nullable(),
+  /** Já vem pronta (upload já feito à parte, como qualquer campo FILE deste app). */
+  avatarUrl: z.string().optional().nullable(),
 });
 
 export type ProfessionalInput = z.infer<typeof professionalSchema>;
@@ -42,6 +48,9 @@ export async function createProfessional(actor: SessionContext, input: { data: u
         role: data.role,
         phone: data.phone || null,
         email: data.email || null,
+        company: data.company || null,
+        area: data.area || null,
+        avatarUrl: data.avatarUrl || null,
       },
     });
 
@@ -76,7 +85,15 @@ export async function updateProfessional(
 
     const updated = await tx.professional.update({
       where: { id: professional.id },
-      data: { name: data.name, role: data.role, phone: data.phone || null, email: data.email || null },
+      data: {
+        name: data.name,
+        role: data.role,
+        phone: data.phone || null,
+        email: data.email || null,
+        company: data.company || null,
+        area: data.area || null,
+        avatarUrl: data.avatarUrl || null,
+      },
     });
 
     await writeAudit(tx, {

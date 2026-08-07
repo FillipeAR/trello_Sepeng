@@ -93,4 +93,45 @@ body {
   .btn-danger {
     @apply border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20;
   }
+
+  /*
+   * Tema do React Flow (tela Equipe da Obra) — só variáveis de cor/forma,
+   * pra herdar a identidade visual do app em vez do tema padrão da lib.
+   * Nó em si é 100% customizado (PositionNode.tsx), isso aqui é só canvas,
+   * controles, mini-mapa e a linha da conexão.
+   */
+  .team-canvas.react-flow {
+    --xy-background-color: var(--surface-muted);
+    --xy-background-pattern-dots-color: var(--border);
+    --xy-edge-stroke: var(--muted);
+    --xy-edge-stroke-width: 2;
+    --xy-edge-stroke-selected: var(--primary);
+    --xy-controls-button-background-color: var(--surface);
+    --xy-controls-button-background-color-hover: var(--surface-muted);
+    --xy-controls-button-color: var(--foreground);
+    --xy-controls-button-border-color: var(--border);
+    --xy-minimap-background-color: var(--surface);
+    --xy-minimap-mask-background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    --xy-minimap-node-background-color: var(--muted);
+    background: var(--surface-muted);
+  }
+
+  .team-canvas .react-flow__controls {
+    box-shadow: var(--shadow-card);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .team-canvas .react-flow__controls-button {
+    border-bottom-color: var(--border);
+  }
+
+  .team-canvas .react-flow__minimap {
+    border-radius: 12px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .team-canvas .react-flow__attribution {
+    display: none;
+  }
 }

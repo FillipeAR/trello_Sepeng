@@ -136,6 +136,7 @@ model Organization {
   outboxEvents  OutboxEvent[]
   professionals Professional[]
   newsPosts     NewsPost[]
+  teamPositions TeamPosition[]
 
   @@map("organizations")
 }
@@ -152,14 +153,53 @@ model Professional {
   /// Opcional — quando preenchido, recebe e-mail ao ser selecionado num campo
   /// STAFF de alguma etapa. Sem relação com `User`/login.
   email          String?
+  /// Foto de perfil — upload público no Vercel Blob (tela Equipe da Obra).
+  avatarUrl      String?
+  /// Subcontratada, quando não é da própria Sepeng.
+  company        String?
+  /// Categoria livre pro filtro do painel de pessoas (ex.: "Engenharia", "Segurança").
+  area           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teamPositions TeamPosition[]
 
   @@index([organizationId, deletedAt])
   @@map("professionals")
+}
+
+/// Cargo da equipe de uma obra específica (tela "Equipe da obra") — árvore via
+/// `parentId`, cada obra tem a sua própria estrutura (não é template
+/// compartilhado). `permissions` é só uma lista exibida no inspetor do cargo,
+/// não controla acesso a nada — RBAC real continua sendo só por papel
+/// (`src/core/rbac`).
+model TeamPosition {
+  id             String    @id @default(cuid())
+  organizationId String
+  projectId      String
+  title          String
+  sector         String?
+  parentId       String?
+  professionalId String?
+  permissions    Json      @default("[]")
+  positionX      Float?
+  positionY      Float?
+  order          Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       TeamPosition?   @relation("TeamPositionParent", fields: [parentId], references: [id])
+  children     TeamPosition[]  @relation("TeamPositionParent")
+  professional Professional?   @relation(fields: [professionalId], references: [id])
+
+  @@index([organizationId, projectId, deletedAt])
+  @@index([organizationId, parentId])
+  @@map("team_positions")
 }
 
 /// Jornal Sepeng — notícias da empresa, aba inicial visível a todos os papéis.
@@ -484,6 +524,7 @@ model Project {
   measurements   Measurement[]
   documents      ProjectDocument[]
   purchaseOrders PurchaseOrder[]
+  teamPositions  TeamPosition[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])

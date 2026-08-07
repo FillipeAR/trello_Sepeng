@@ -16,6 +16,9 @@ export interface ProfessionalData {
   role: string;
   phone: string | null;
   email: string | null;
+  company: string | null;
+  area: string | null;
+  avatarUrl: string | null;
 }
 
 function ProfessionalRow({ professional }: { professional: ProfessionalData }) {
@@ -26,6 +29,9 @@ function ProfessionalRow({ professional }: { professional: ProfessionalData }) {
     <div className="rounded-lg border border-border p-3">
       <form action={formAction} className="grid gap-2 sm:grid-cols-[1.8fr_1.8fr_1.4fr_1.6fr_auto]">
         <input type="hidden" name="professionalId" value={professional.id} />
+        <input type="hidden" name="existingCompany" value={professional.company ?? ""} />
+        <input type="hidden" name="existingArea" value={professional.area ?? ""} />
+        <input type="hidden" name="existingAvatarUrl" value={professional.avatarUrl ?? ""} />
         <input name="name" required defaultValue={professional.name} placeholder="Nome" className="input" />
         <input
           name="role"
