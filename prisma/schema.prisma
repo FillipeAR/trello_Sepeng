@@ -135,8 +135,6 @@ model Organization {
   notifications Notification[]
   outboxEvents  OutboxEvent[]
   professionals Professional[]
-  orgChartPositions   OrgChartPosition[]
-  orgChartAssignments ProjectOrgChartAssignment[]
   newsPosts     NewsPost[]
 
   @@map("organizations")
@@ -151,62 +149,17 @@ model Professional {
   name           String
   role           String
   phone          String?
-  /// Opcional — quando preenchido, recebe e-mail ao ser selecionado numa obra
-  /// (campo STAFF ou organograma). Sem relação com `User`/login.
+  /// Opcional — quando preenchido, recebe e-mail ao ser selecionado num campo
+  /// STAFF de alguma etapa. Sem relação com `User`/login.
   email          String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization        Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  orgChartAssignments ProjectOrgChartAssignment[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, deletedAt])
   @@map("professionals")
-}
-
-/// Cargo do organograma — template por organização, editável (adicionar,
-/// renomear, remover, reordenar), sem versionamento como o fluxo. `parentId`
-/// dá a forma de árvore (ex.: Diretor → Gerente de Contrato → Gerentes de
-/// área → chefias de departamento).
-model OrgChartPosition {
-  id             String    @id @default(cuid())
-  organizationId String
-  title          String
-  parentId       String?
-  order          Int       @default(0)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
-
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent       OrgChartPosition?  @relation("OrgChartPositionParent", fields: [parentId], references: [id])
-  children     OrgChartPosition[] @relation("OrgChartPositionParent")
-  assignments  ProjectOrgChartAssignment[]
-
-  @@index([organizationId, deletedAt])
-  @@index([organizationId, parentId])
-  @@map("org_chart_positions")
-}
-
-/// Quem ocupa cada cargo do organograma numa obra específica — o template
-/// (`OrgChartPosition`) é compartilhado, a ocupação é por obra.
-model ProjectOrgChartAssignment {
-  id             String   @id @default(cuid())
-  organizationId String
-  projectId      String
-  positionId     String
-  professionalId String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  position     OrgChartPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
-  professional Professional?    @relation(fields: [professionalId], references: [id])
-
-  @@unique([projectId, positionId])
-  @@map("project_org_chart_assignments")
 }
 
 /// Jornal Sepeng — notícias da empresa, aba inicial visível a todos os papéis.
@@ -531,7 +484,6 @@ model Project {
   measurements   Measurement[]
   documents      ProjectDocument[]
   purchaseOrders PurchaseOrder[]
-  orgChartAssignments ProjectOrgChartAssignment[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])

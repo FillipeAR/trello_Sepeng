@@ -17,9 +17,6 @@
   --sidebar-from: #071126;
   --sidebar-via: #0b1730;
   --sidebar-to: #111c3d;
-  /* Organograma — teal da marca Sepeng, só usado ali (não é o --primary do resto do app). */
-  --orgchart-accent: #0d9488;
-  --orgchart-accent-foreground: #ffffff;
 }
 
 @theme inline {
@@ -51,8 +48,6 @@
     --warning: #fbbf24;
     --danger: #f87171;
     --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.25);
-    --orgchart-accent: #2dd4bf;
-    --orgchart-accent-foreground: #04302b;
   }
 }
 
@@ -97,108 +92,5 @@ body {
 
   .btn-danger {
     @apply border border-danger/30 bg-danger/10 text-danger hover:bg-danger/20;
-  }
-
-  /*
-   * Organograma — diagrama de caixas conectadas (CSS puro, sem lib de
-   * diagrama). `.orgchart-tree` vai na <ul> raiz; cada <li> é um cargo,
-   * cada <ul> aninhada é o grupo de filhos. As linhas são desenhadas com
-   * borda em pseudo-elementos, não SVG.
-   */
-  .orgchart-tree,
-  .orgchart-tree ul {
-    display: flex;
-    justify-content: center;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .orgchart-tree ul {
-    padding-top: 28px;
-    position: relative;
-  }
-
-  .orgchart-tree li {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    position: relative;
-    padding: 28px 10px 0 10px;
-  }
-
-  .orgchart-tree li::before,
-  .orgchart-tree li::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    right: 50%;
-    width: 50%;
-    height: 28px;
-    border-top: 2.5px solid var(--orgchart-accent);
-  }
-
-  .orgchart-tree li::after {
-    right: auto;
-    left: 50%;
-    border-left: 2.5px solid var(--orgchart-accent);
-  }
-
-  .orgchart-tree li:only-child {
-    padding-top: 0;
-  }
-
-  .orgchart-tree li:only-child::before,
-  .orgchart-tree li:only-child::after {
-    display: none;
-  }
-
-  .orgchart-tree li:first-child::before,
-  .orgchart-tree li:last-child::after {
-    border: 0 none;
-  }
-
-  .orgchart-tree li:last-child::before {
-    border-right: 2.5px solid var(--orgchart-accent);
-    border-radius: 0 10px 0 0;
-  }
-
-  .orgchart-tree li:first-child::after {
-    border-radius: 10px 0 0 0;
-  }
-
-  .orgchart-tree ul::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 0;
-    height: 28px;
-    border-left: 2.5px solid var(--orgchart-accent);
-  }
-
-  /* Caixa padrão (nível "cargo" — folha da árvore, ex.: Supervisora). */
-  .orgchart-box {
-    @apply rounded-lg border border-border bg-surface px-3 py-2 text-center text-xs shadow-sm;
-    min-width: 130px;
-    max-width: 190px;
-  }
-
-  /* Nível "executivo" (Diretor, Gerente de Contrato/Produção/Engenharia) — pílula, como no
-     organograma de referência da Sepeng. */
-  .orgchart-box--exec {
-    @apply rounded-full border-2 bg-surface px-4 py-2 text-center text-xs font-semibold shadow-sm;
-    border-color: var(--orgchart-accent);
-    min-width: 150px;
-    max-width: 210px;
-  }
-
-  /* Nível "departamento" (Segurança do Trabalho, Qualidade, etc.) — selo sólido teal. */
-  .orgchart-box--dept {
-    @apply rounded-full px-3.5 py-1.5 text-center text-xs font-semibold shadow-sm;
-    background: var(--orgchart-accent);
-    color: var(--orgchart-accent-foreground);
-    min-width: 130px;
-    max-width: 190px;
   }
 }

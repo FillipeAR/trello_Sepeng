@@ -75,7 +75,7 @@ scripts/demo-inserir-etapa.ts ← prova que reconfigurar o fluxo não exige cód
 ```bash
 npx prisma dev --name obraflow   # Postgres local (deixe rodando em outro terminal)
 npm run dev
-npm test                         # 87 testes de engine, RBAC e organograma, sem banco
+npm test                         # 83 testes de engine e RBAC, sem banco
 npm run db:push                  # aplica o schema no dev
 npm run db:seed                  # semeia org, papéis, usuários e o fluxo
 npm run build
@@ -117,8 +117,7 @@ senha `obraflow123`.
 MVP completo e verificado ponta a ponta: auth, RBAC, engine versionado, fluxo de 8 etapas,
 cadastro de obra, formulários dinâmicos, esteira visual, fila do departamento, auditoria,
 notificações in-app (e-mail via Resend pra seleção de profissional), dashboards, visualização
-do fluxo, gestão de usuários, organograma editável e Jornal Sepeng. Build, lint, `tsc` e 87
-testes passando.
+do fluxo, gestão de usuários e Jornal Sepeng. Build, lint, `tsc` e 83 testes passando.
 
 Existe um fluxo v2 no banco (com etapa Jurídico) criado pelo script de demonstração, e duas
 obras de exemplo.
@@ -316,8 +315,7 @@ de propósito (é um log técnico genérico, não vale a pena diferenciar por ti
 
 Novo evento `DOMAIN_EVENTS.STAFF_ASSIGNED` ("staff.assigned"), enfileirado por
 `enqueueStaffAssignedEvent` (`src/modules/staff/notify.ts`) sempre que um campo STAFF muda de
-profissional em `executeStageAction`, ou uma atribuição de organograma muda (ver abaixo) — um
-helper único, dois pontos de disparo. Como `Professional` não tem login, esse evento **não**
+profissional em `executeStageAction`. Como `Professional` não tem login, esse evento **não**
 segue o fluxo genérico de `Notification` in-app (que exige `userId`): o dispatcher
 (`dispatchStaffAssignedEmail` em `src/modules/notifications/dispatcher.ts`) resolve o
 `professionalId` do payload e manda e-mail direto, sem passar pela preferência opt-in por
@@ -333,31 +331,21 @@ derruba o evento" que `dispatchWhatsApp` já tinha) — não existe retentativa 
 travada por causa disso. Não precisou de cron novo: `processOutbox()` já roda de forma
 síncrona logo após cada ação (`obras/actions.ts`), então o aviso sai quase na hora.
 
-### Organograma editável — entregue
+### Organograma editável — implementado e depois revertido
 
-Dois modelos novos: `OrgChartPosition` (template de cargos por organização, em árvore via
-`parentId` — auto-relacionamento) e `ProjectOrgChartAssignment` (quem ocupa cada cargo em
-cada obra). `/admin/organograma` (gated por `STAFF_MANAGE`, mesma permissão que já rege
-`/admin/profissionais` — sem permissão nova) edita o template: adicionar cargo (com "reporta
-a" opcional), renomear, mover entre irmãos, excluir — excluir não é em cascata, os filhos
-diretos sobem pro topo da árvore em vez de sumir junto. `assertNoCycle`
-(`src/modules/orgchart/commands.ts`) impede reatribuir um cargo pra debaixo de um dos seus
-próprios subordinados. `buildOrgChartTree`/`flattenWithDepth`
-(`src/modules/orgchart/tree.ts`, puro, testado) montam a árvore a partir da lista plana —
-reaproveitado tanto no editor quanto na exibição por obra.
-
-Nova seção "Organograma" na página da obra (`OrgChartSection.tsx`, ao lado de
-`TasksSection`/`CommentsSection`): a mesma árvore, com um dropdown de profissional por cargo
-pra quem tem `STAFF_MANAGE` (senão é só leitura). Trocar quem ocupa um cargo chama
-`assignPosition`, que enfileira o mesmo evento `staff.assigned` do campo STAFF (seção
-anterior) — um único caminho de e-mail pra "fui selecionado pra obra", venha de onde vier.
-**Aditivo**: não mexe nos campos STAFF já publicados na etapa Diretoria — consolidar os dois
-um dia seria uma nova versão de fluxo (draft + publish), fora do escopo agora.
-
-`scripts/seed-orgchart-template.ts` (opcional, idempotente) semeia uma estrutura de partida
-inspirada no organograma de referência da Sepeng (Diretores → Gerente de Contrato → Gerentes
-de área → departamentos) só pra não nascer vazio — os nomes de cargo são 100% editáveis
-depois pela própria tela, sem precisar de código.
+Chegou a existir uma tela `/admin/organograma` (template de cargos em árvore) + seção na
+página da obra pra atribuir profissional por cargo, incluindo um diagrama visual em CSS puro
+(caixas conectadas, no estilo do organograma de referência da Sepeng). A Sepeng decidiu não
+seguir com a feature — removida por completo: código (`src/modules/orgchart/`,
+`OrgChartSection.tsx`, entrada de nav), modelos `OrgChartPosition`/`ProjectOrgChartAssignment`
+(migration `20260807140000_drop_orgchart`, dado de teste apagado local e produção) e o CSS
+`.orgchart-*` de `globals.css`. Os campos "Gerente responsável"/"Encarregado responsável" da
+etapa Diretoria, que tinham sido removidos por ficarem redundantes com o organograma
+(`scripts/remove-diretoria-staff-fields.ts`), voltaram
+(`scripts/restore-diretoria-staff-fields.ts`) — é o único lugar que registra quem é
+gerente/encarregado de uma obra agora. O evento `staff.assigned`/e-mail de seleção (seção
+anterior) continua existindo, só perdeu o segundo ponto de disparo (a atribuição do
+organograma) — hoje dispara só a partir do campo STAFF da etapa.
 
 ### Jornal Sepeng — entregue
 
@@ -375,12 +363,10 @@ pra listas que não costumam crescer descontroladamente.
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
 escalonamento por SLA, paginação por cursor) estão entregues, junto com uma segunda rodada:
-contas de usuário por setor, valor de contrato restrito, e-mail de seleção de profissional,
-organograma editável e Jornal Sepeng. **Pendências operacionais antes de ir pra produção**:
-rodar `scripts/sync-permissions.ts` (permissões novas: `user:manage` já existia mas nunca foi
-sincronizada pra valer, `project:read:contract_value`, `news:manage`), rodar
-`scripts/migrate-staff-field-values.ts` (converte STAFF de nome pra id nos dados já existentes)
-e provisionar o Resend (`vercel integration add resend` + `vercel env pull`) — sem isso o
-e-mail de seleção falha silenciosamente (loga erro, não quebra nada, só não envia). Próximos
-candidatos sem ordem definida: paginação/filtros mais ricos nas outras listagens
-(`/lembretes`, auditoria), export CSV/PDF, e o que a Sepeng priorizar no uso real.
+contas de usuário por setor, valor de contrato restrito, e-mail de seleção de profissional e
+Jornal Sepeng (organograma foi tentado e revertido — ver seção acima). `RESEND_API_KEY` já
+está provisionado (Produção e Preview) e testado com envio real — falta só `EMAIL_FROM` com
+um domínio verificado na Resend pra sair de "só entrega em endereço de teste" pra "entrega em
+qualquer profissional real". Próximos candidatos sem ordem definida: paginação/filtros mais
+ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF, e o que a Sepeng
+priorizar no uso real.

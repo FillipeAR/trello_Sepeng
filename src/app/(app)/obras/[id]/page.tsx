@@ -11,11 +11,9 @@ import { listProjectComments } from "@/modules/comments/queries";
 import { getProjectMeasurements } from "@/modules/measurements/queries";
 import { getProjectDocuments } from "@/modules/documents/queries";
 import { getProjectPurchaseOrders, listSuppliers } from "@/modules/procurement/queries";
-import { getProjectOrgChart } from "@/modules/orgchart/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
-import { OrgChartSection } from "@/modules/projects/components/OrgChartSection";
 import { CommentsSection } from "@/modules/projects/components/CommentsSection";
 import { MeasurementsSection } from "@/modules/projects/components/MeasurementsSection";
 import { DocumentsSection } from "@/modules/projects/components/DocumentsSection";
@@ -33,7 +31,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
   const { project, activeStages, timeline, progress, updates } = detail;
   const canUpdateProgress = hasPermission(actor, PERMISSIONS.PROJECT_UPDATE_PROGRESS);
 
-  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers, orgChart] =
+  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers] =
     await Promise.all([
       prisma.membership.findMany({
         where: { organizationId: actor.organizationId, isActive: true },
@@ -47,7 +45,6 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
       getProjectDocuments(actor, project.id),
       getProjectPurchaseOrders(actor, project.id),
       listSuppliers(actor),
-      getProjectOrgChart(actor, project.id),
     ]);
 
   return (
@@ -121,16 +118,6 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
             tasks={tasks}
             users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
           />
-
-          {orgChart ? (
-            <OrgChartSection
-              projectId={project.id}
-              positions={orgChart.positions}
-              occupantByPositionId={orgChart.occupantByPositionId}
-              professionals={professionals.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
-              canManage={hasPermission(actor, PERMISSIONS.STAFF_MANAGE)}
-            />
-          ) : null}
 
           {measurements ? (
             <MeasurementsSection projectId={project.id} rows={measurements.rows} summary={measurements.summary} />

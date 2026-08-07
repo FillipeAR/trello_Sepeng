@@ -8,7 +8,6 @@ import {
   ClipboardList,
   HardHat,
   LayoutGrid,
-  Network,
   Newspaper,
   Plus,
   Search,
@@ -60,12 +59,6 @@ export default async function AppLayout({
           href: "/admin/profissionais",
           label: "Engenheiros",
           icon: <HardHat strokeWidth={1.75} />,
-          show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
-        },
-        {
-          href: "/admin/organograma",
-          label: "Organograma",
-          icon: <Network strokeWidth={1.75} />,
           show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
         },
         {

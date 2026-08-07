@@ -3,11 +3,11 @@ import { enqueueEvent } from "@/server/outbox";
 import type { Tx } from "@/server/db";
 
 /**
- * Enfileira o aviso de seleção pra um `Professional` — usado tanto pelo campo
- * STAFF da etapa (`executeStageAction`) quanto pela atribuição no organograma
- * (`assignPosition`). Profissional não tem login, então isso não vira
- * `Notification` in-app: o dispatcher resolve o e-mail direto pelo
- * `professionalId` do payload (ver `src/modules/notifications/dispatcher.ts`).
+ * Enfileira o aviso de seleção pra um `Professional` — chamado por
+ * `executeStageAction` quando um campo STAFF muda de profissional.
+ * Profissional não tem login, então isso não vira `Notification` in-app: o
+ * dispatcher resolve o e-mail direto pelo `professionalId` do payload (ver
+ * `src/modules/notifications/dispatcher.ts`).
  */
 export async function enqueueStaffAssignedEvent(
   tx: Tx,
@@ -17,15 +17,14 @@ export async function enqueueStaffAssignedEvent(
     projectId: string;
     projectName: string;
     projectCode: string;
-    /** Ex.: "Gerente responsável" (campo) ou "Engenheiro Residente" (cargo do organograma). */
+    /** Ex.: "Gerente responsável" — o rótulo do campo STAFF preenchido. */
     contextLabel: string;
     /**
-     * Só passe uma chave estável quando o chamador tiver uma entidade de
-     * uso único pra ancorar nela (ex.: `StageInstance`, fechada pra sempre
-     * depois desta chamada). Pra atribuições que podem repetir o mesmo
-     * profissional depois de trocado (ex.: organograma), omita — cada
-     * seleção deve gerar um aviso novo, não ser deduplicada contra o
-     * histórico.
+     * Chave estável ancorada numa entidade de uso único (ex.: `StageInstance`,
+     * fechada pra sempre depois desta chamada) — evita evento duplicado se o
+     * comando for reexecutado. Omita só se o chamador puder repetir o mesmo
+     * profissional depois de trocado; aí cada seleção deve gerar um aviso
+     * novo, não ser deduplicada contra o histórico.
      */
     idempotencyKey?: string;
   },

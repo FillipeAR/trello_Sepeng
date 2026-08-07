@@ -20,7 +20,7 @@ export const DOMAIN_EVENTS = {
   MEASUREMENT_REJECTED: "measurement.rejected",
   DOCUMENT_EXPIRING_SOON: "document.expiring_soon",
   DOCUMENT_EXPIRED: "document.expired",
-  /** Profissional (STAFF) selecionado numa obra — campo de etapa ou organograma. */
+  /** Profissional (STAFF) selecionado num campo de etapa da obra. */
   STAFF_ASSIGNED: "staff.assigned",
 } as const;
 
