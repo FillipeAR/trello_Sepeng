@@ -21,7 +21,11 @@ import { buildTeamTree, wouldCreateCycle, type FlatTeamPosition } from "../tree"
 import { layoutTeamTree } from "../layout";
 import { PositionNode, type PositionNodeType } from "./PositionNode";
 import type { TeamOccupant } from "../queries";
-import { moveNodeOnCanvasAction, reparentPositionAction } from "@/app/(app)/obras/[id]/equipe/actions";
+import {
+  deletePositionDirect,
+  moveNodeOnCanvasAction,
+  reparentPositionAction,
+} from "@/app/(app)/obras/[id]/equipe/actions";
 
 const nodeTypes = { position: PositionNode };
 
@@ -31,7 +35,6 @@ function buildNodesAndEdges(
   canManage: boolean,
   collapseAll: boolean,
   selectedId: string | null,
-  onSelect: (id: string) => void,
   onDropProfessional: (positionId: string, professionalId: string) => void,
 ): { nodes: PositionNodeType[]; edges: Edge[] } {
   const tree = buildTeamTree(positions);
@@ -51,10 +54,10 @@ function buildNodesAndEdges(
         position,
         occupant: occupantByPositionId[position.id] ?? null,
         canManage,
-        onSelect,
         onDropProfessional,
       },
       draggable: canManage,
+      deletable: canManage,
     };
   });
 
@@ -104,6 +107,7 @@ interface TeamCanvasProps {
   collapseAll: boolean;
   onSelect: (id: string | null) => void;
   onAssign: (positionId: string, professionalId: string) => void;
+  onError: (message: string) => void;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -125,13 +129,11 @@ function TeamCanvasInner({
   collapseAll,
   onSelect,
   onAssign,
+  onError,
   containerRef,
 }: TeamCanvasProps) {
-  const handleSelect = useCallback((id: string) => onSelect(id), [onSelect]);
-
   const initial = useMemo(
-    () =>
-      buildNodesAndEdges(positions, occupantByPositionId, canManage, collapseAll, selectedId, handleSelect, onAssign),
+    () => buildNodesAndEdges(positions, occupantByPositionId, canManage, collapseAll, selectedId, onAssign),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -141,16 +143,28 @@ function TeamCanvasInner({
 
   const onNodesChange = useCallback((changes: NodeChange<PositionNodeType>[]) => {
     setNodes((current) => {
-      const next = [...current];
+      let next = current;
       for (const change of changes) {
         if (change.type === "position" && change.position) {
-          const idx = next.findIndex((n) => n.id === change.id);
-          if (idx >= 0) next[idx] = { ...next[idx], position: change.position };
+          next = next.map((n) => (n.id === change.id ? { ...n, position: change.position! } : n));
+        } else if (change.type === "select") {
+          next = next.map((n) => (n.id === change.id ? { ...n, selected: change.selected } : n));
+        } else if (change.type === "remove") {
+          next = next.filter((n) => n.id !== change.id);
         }
       }
       return next;
     });
   }, []);
+
+  // Seleção nativa do React Flow (clique no nó) — precisa passar por aqui, e não por um
+  // onClick próprio, pra tecla Delete/Backspace saber qual nó apagar.
+  const onSelectionChange = useCallback(
+    ({ nodes: selected }: { nodes: PositionNodeType[] }) => {
+      onSelect(selected[0]?.id ?? null);
+    },
+    [onSelect],
+  );
 
   const onNodeDragStop = useCallback(
     (_event: unknown, node: PositionNodeType) => {
@@ -164,21 +178,34 @@ function TeamCanvasInner({
     setEdges((current) => current.filter((e) => !changes.some((c) => c.type === "remove" && c.id === e.id)));
   }, []);
 
+  const onNodesDelete = useCallback(
+    (deleted: PositionNodeType[]) => {
+      if (!canManage) return;
+      onSelect(null);
+      for (const node of deleted) {
+        void deletePositionDirect({ positionId: node.id, projectId }).then((result) => {
+          if (!result.ok) onError(result.error ?? "Não foi possível excluir esse cargo.");
+        });
+      }
+    },
+    [canManage, onSelect, onError, projectId],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!canManage || !connection.source || !connection.target) return;
       if (connection.source === connection.target) return;
       if (wouldCreateCycle(positions, connection.target, connection.source)) {
-        window.alert("Não é possível: isso criaria um ciclo na hierarquia.");
+        onError("Não é possível: isso criaria um ciclo na hierarquia.");
         return;
       }
       void reparentPositionAction({ positionId: connection.target, parentId: connection.source, projectId }).then(
         (result) => {
-          if (!result.ok) window.alert(result.error ?? "Não foi possível reatribuir o superior.");
+          if (!result.ok) onError(result.error ?? "Não foi possível reatribuir o superior.");
         },
       );
     },
-    [canManage, positions, projectId],
+    [canManage, positions, projectId, onError],
   );
 
   return (
@@ -191,7 +218,9 @@ function TeamCanvasInner({
       onNodeDragStop={onNodeDragStop}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
-      onPaneClick={() => onSelect(null)}
+      onSelectionChange={onSelectionChange}
+      onNodesDelete={onNodesDelete}
+      deleteKeyCode={["Backspace", "Delete"]}
       fitView
       minZoom={0.2}
       maxZoom={1.5}
@@ -209,6 +238,12 @@ function TeamCanvasInner({
 }
 
 export function TeamCanvas(props: TeamCanvasProps) {
+  // `selectedId` fica de fora de propósito: remontar o canvas a cada clique reseta
+  // zoom/posição e, pior, entrava em loop (clique -> remonta -> React Flow reafirma a seleção
+  // no mount -> dispara onSelectionChange de novo -> às vezes alterna com null no meio do
+  // caminho -> muda a key -> remonta nunca acaba de assentar). Seleção agora é só um repasse
+  // pro pai (pro inspetor abrir) — o canvas em si controla seu próprio `selected` via
+  // `onNodesChange`/`onSelectionChange`, sem precisar remontar nada.
   const dataKey = useMemo(() => {
     const posKey = props.positions
       .map(
@@ -218,8 +253,8 @@ export function TeamCanvas(props: TeamCanvasProps) {
           }`,
       )
       .join("|");
-    return `${posKey}::${props.selectedId ?? ""}::${props.collapseAll}::${props.canManage}`;
-  }, [props.positions, props.occupantByPositionId, props.selectedId, props.collapseAll, props.canManage]);
+    return `${posKey}::${props.collapseAll}::${props.canManage}`;
+  }, [props.positions, props.occupantByPositionId, props.collapseAll, props.canManage]);
 
   return (
     <ReactFlowProvider>

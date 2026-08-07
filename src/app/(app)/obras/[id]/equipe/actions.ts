@@ -112,6 +112,22 @@ export async function deletePositionAction(_prev: ActionState, formData: FormDat
   return { success: true };
 }
 
+/** Versão sem `<form>` — apagar um cargo pela tecla Delete/Backspace no canvas. */
+export async function deletePositionDirect(input: { positionId: string; projectId: string }): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const actor = await requireActor();
+  try {
+    await deletePosition(actor, { positionId: input.positionId });
+  } catch (error) {
+    if (error instanceof CommandError) return { ok: false, error: error.message };
+    throw error;
+  }
+  revalidatePath(`/obras/${input.projectId}/equipe`);
+  return { ok: true };
+}
+
 export async function assignProfessionalAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireActor();
   const projectId = String(formData.get("projectId") ?? "");

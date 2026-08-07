@@ -10,7 +10,6 @@ export interface PositionNodeData extends Record<string, unknown> {
   position: FlatTeamPosition;
   occupant: TeamOccupant | null;
   canManage: boolean;
-  onSelect: (positionId: string) => void;
   onDropProfessional: (positionId: string, professionalId: string) => void;
 }
 
@@ -37,14 +36,13 @@ function Avatar({ name, avatarUrl }: { name: string; avatarUrl: string | null })
 }
 
 function PositionNodeComponent({ data, selected }: NodeProps<PositionNodeType>) {
-  const { position, occupant, canManage, onSelect, onDropProfessional } = data;
+  const { position, occupant, canManage, onDropProfessional } = data;
 
   return (
     <div
       className={`card w-[220px] cursor-pointer border p-3 transition ${
         selected ? "border-primary shadow-[0_0_0_2px_var(--primary)]" : "border-border"
       }`}
-      onClick={() => onSelect(position.id)}
       onDragOver={(e) => {
         if (!canManage) return;
         e.preventDefault();

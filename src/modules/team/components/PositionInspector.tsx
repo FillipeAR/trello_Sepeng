@@ -134,18 +134,14 @@ export function PositionInspector({
         <form action={deleteAction}>
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="positionId" value={position.id} />
-          <button
-            type="submit"
-            onClick={(e) => {
-              if (!window.confirm(`Excluir o cargo "${position.title}"? Subordinados diretos sobem pro topo.`))
-                e.preventDefault();
-              else onClose();
-            }}
-            className="text-xs text-muted hover:text-danger"
-          >
+          <button type="submit" onClick={onClose} className="text-xs text-muted hover:text-danger">
             Excluir cargo
           </button>
         </form>
+        <p className="mt-1 text-[11px] text-muted">
+          Subordinados diretos sobem pro topo, não são excluídos junto. Também dá pra apagar
+          com a tecla Delete/Backspace, com o cargo selecionado no canvas.
+        </p>
         {deleteState.errors?.length ? <p className="mt-1 text-xs text-danger">{deleteState.errors.join(" ")}</p> : null}
       </div>
     </aside>
