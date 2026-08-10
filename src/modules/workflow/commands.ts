@@ -317,6 +317,9 @@ const stageSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, "Informe uma cor hexadecimal válida (ex.: #64748b).")
     .default("#64748b"),
+  completionMode: z.enum(["FORM", "EXTERNAL"]).default("FORM"),
+  externalCompletionPath: z.string().nullable().optional(),
+  externalCompletionLabel: z.string().nullable().optional(),
 });
 
 export type StageInput = z.infer<typeof stageSchema>;
@@ -366,6 +369,9 @@ export async function createStage(actor: SessionContext, input: { versionId: str
         isInitial: data.isInitial,
         isFinal: data.isFinal,
         color: data.color,
+        completionMode: data.completionMode,
+        externalCompletionPath: data.externalCompletionPath || null,
+        externalCompletionLabel: data.externalCompletionLabel || null,
       },
     });
 
@@ -410,6 +416,9 @@ export async function updateStage(actor: SessionContext, input: { stageId: strin
         isInitial: data.isInitial,
         isFinal: data.isFinal,
         color: data.color,
+        completionMode: data.completionMode,
+        externalCompletionPath: data.externalCompletionPath || null,
+        externalCompletionLabel: data.externalCompletionLabel || null,
       },
     });
 

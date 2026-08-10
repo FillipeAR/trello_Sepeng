@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 import { hasPermission } from "@/core/rbac/can";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { getTeamStructure } from "@/modules/team/queries";
+import { getPendingExternalCompletion } from "@/modules/projects/queries";
 import { TeamPageShell } from "@/modules/team/components/TeamPageShell";
 
 export default async function EquipeDaObraPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,9 @@ export default async function EquipeDaObraPage({ params }: { params: Promise<{ i
 
   const structure = await getTeamStructure(actor, project.id);
   if (!structure) notFound();
+
+  const pendingCompletion = await getPendingExternalCompletion(actor, project.id, "equipe");
+  const canSendTeam = structure.positions.some((p) => p.professionalId);
 
   return (
     <div className="flex h-[calc(100vh-5.5rem)] flex-col gap-4">
@@ -46,6 +50,8 @@ export default async function EquipeDaObraPage({ params }: { params: Promise<{ i
         occupantByPositionId={structure.occupantByPositionId}
         professionals={structure.professionals}
         canManage={hasPermission(actor, PERMISSIONS.STAFF_MANAGE)}
+        pendingCompletion={pendingCompletion}
+        canSendTeam={canSendTeam}
       />
     </div>
   );

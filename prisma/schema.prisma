@@ -30,6 +30,16 @@ enum JoinPolicy {
   ANY
 }
 
+/// FORM: a etapa mostra o formulário padrão (`DynamicStageForm`), gerado a
+/// partir de `StageField`. EXTERNAL: a ação de avançar não tem formulário
+/// próprio — a etapa redireciona pra outra rota da aplicação
+/// (`externalCompletionPath`), que decide sozinha quando está pronta pra
+/// disparar a mesma ação de avanço.
+enum StageCompletionMode {
+  FORM
+  EXTERNAL
+}
+
 enum FieldType {
   TEXT
   TEXTAREA
@@ -191,11 +201,11 @@ model TeamPosition {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project      Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent       TeamPosition?   @relation("TeamPositionParent", fields: [parentId], references: [id])
-  children     TeamPosition[]  @relation("TeamPositionParent")
-  professional Professional?   @relation(fields: [professionalId], references: [id])
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       TeamPosition?  @relation("TeamPositionParent", fields: [parentId], references: [id])
+  children     TeamPosition[] @relation("TeamPositionParent")
+  professional Professional?  @relation(fields: [professionalId], references: [id])
 
   @@index([organizationId, projectId, deletedAt])
   @@index([organizationId, parentId])
@@ -225,38 +235,75 @@ model NewsPost {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  avatarUrl    String?
+  id              String    @id @default(cuid())
+  name            String
+  email           String    @unique
+  passwordHash    String
+  avatarUrl       String?
   /// E.164 (ex. +5511987654321) — necessário pra habilitar notificação por WhatsApp.
-  phone        String?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  phone           String?
+  isActive        Boolean   @default(true)
+  /// `null` = e-mail não confirmado. Conta criada por admin (`createUser`) já nasce
+  /// verificada (o admin está vouching pelo e-mail); só cadastro próprio (`signUp`)
+  /// nasce `null` e depende do link de `EmailVerificationToken`.
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
-  memberships     Membership[]
-  createdProjects Project[]                @relation("ProjectCreatedBy")
-  assignments     ProjectTeamAssignment[]
-  completedStages StageInstance[]          @relation("StageCompletedBy")
-  updates         ProjectUpdate[]
-  comments        Comment[]
-  mentions        Mention[]
-  notifications   Notification[]
-  notifPrefs      NotificationPreference[]
-  assignedTasks   Task[]                   @relation("TaskAssignee")
-  createdTasks    Task[]                   @relation("TaskCreatedBy")
-  attachments     Attachment[]
-  auditLogs       AuditLog[]
-  createdMeasurements  Measurement[]       @relation("MeasurementCreatedBy")
-  approvedMeasurements Measurement[]       @relation("MeasurementApprovedBy")
-  createdDocuments     ProjectDocument[]
-  createdPurchaseOrders PurchaseOrder[]
-  newsPosts            NewsPost[]
+  memberships             Membership[]
+  createdProjects         Project[]                @relation("ProjectCreatedBy")
+  assignments             ProjectTeamAssignment[]
+  completedStages         StageInstance[]          @relation("StageCompletedBy")
+  updates                 ProjectUpdate[]
+  comments                Comment[]
+  mentions                Mention[]
+  notifications           Notification[]
+  notifPrefs              NotificationPreference[]
+  assignedTasks           Task[]                   @relation("TaskAssignee")
+  createdTasks            Task[]                   @relation("TaskCreatedBy")
+  attachments             Attachment[]
+  auditLogs               AuditLog[]
+  createdMeasurements     Measurement[]            @relation("MeasurementCreatedBy")
+  approvedMeasurements    Measurement[]            @relation("MeasurementApprovedBy")
+  createdDocuments        ProjectDocument[]
+  createdPurchaseOrders   PurchaseOrder[]
+  newsPosts               NewsPost[]
+  emailVerificationTokens EmailVerificationToken[]
 
   @@map("users")
+}
+
+/// Registro append-only de toda tentativa de login (sucesso ou falha), sem relação
+/// com `User` — o e-mail pode nem existir, é o que permite travar enumeração também.
+/// Consultado por `src/modules/auth/rate-limit.ts` numa janela deslizante de tempo.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
+}
+
+/// Token opaco de confirmação de e-mail pro cadastro próprio (`/cadastro`). Uso único
+/// (`usedAt`), expira em 24h. Só existe pra contas criadas via `signUp` — contas
+/// criadas por admin nunca geram um destes (já nascem com `User.emailVerifiedAt`).
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
 
 model Membership {
@@ -385,25 +432,31 @@ model WorkflowVersion {
 }
 
 model WorkflowStage {
-  id             String     @id @default(cuid())
-  organizationId String
-  versionId      String
-  key            String
-  name           String
+  id                      String              @id @default(cuid())
+  organizationId          String
+  versionId               String
+  key                     String
+  name                    String
   /// Rótulo mostrado ao usuário ao ENTRAR na etapa ("Obra Ganha", "RH Concluído").
-  displayStatus  String
-  description    String?
-  order          Int
-  departmentId   String?
-  slaHours       Int?
-  mode           StageMode  @default(SEQUENTIAL)
-  joinPolicy     JoinPolicy @default(ALL)
-  isInitial      Boolean    @default(false)
-  isFinal        Boolean    @default(false)
-  color          String     @default("#64748b")
-  icon           String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  displayStatus           String
+  description             String?
+  order                   Int
+  departmentId            String?
+  slaHours                Int?
+  mode                    StageMode           @default(SEQUENTIAL)
+  joinPolicy              JoinPolicy          @default(ALL)
+  isInitial               Boolean             @default(false)
+  isFinal                 Boolean             @default(false)
+  color                   String              @default("#64748b")
+  icon                    String?
+  completionMode          StageCompletionMode @default(FORM)
+  /// Sub-rota sob /obras/{projectId}/ pra onde a etapa redireciona quando
+  /// completionMode = EXTERNAL. Ex.: "equipe".
+  externalCompletionPath  String?
+  /// Texto do botão de redirect na página da obra. Ex.: "Ir para Equipe da Obra".
+  externalCompletionLabel String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
 
   version    WorkflowVersion           @relation(fields: [versionId], references: [id], onDelete: Cascade)
   department Department?               @relation(fields: [departmentId], references: [id])

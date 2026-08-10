@@ -82,8 +82,11 @@ npm run build
 ```
 
 Contas de demonstração: `orcamento@`, `diretoria@`, `rh@`, `seguranca@`, `financeiro@`,
-`suprimentos@`, `gestor@`, `admin@`, `visualizador@` — todos `@obraflow.com`,
-senha `obraflow123`.
+`gestor@`, `admin@`, `visualizador@` — todos `@obraflow.com`, senha `obraflow123`. Etapa
+Suprimentos foi removida do fluxo (ver seção abaixo), então `suprimentos@` não tem mais
+etapa própria pra atuar. Orçamento também tem duas contas nomeadas reais (Erika e Thaina,
+`erika.orcamento@sepeng.com.br`/`thaina.orcamento@sepeng.com.br`) com senha própria gerada
+— não é a senha pública de demonstração, não fica documentada aqui.
 
 ## Convenções
 
@@ -412,6 +415,144 @@ time, e fica visível (leitura, sem precisar de `staff:manage`) pra qualquer um 
 a obra, em qualquer etapa do fluxo — não só a Diretoria. "Quantidade de funcionários" e
 "Recursos necessários" continuam no formulário (não são sobre "quem", são planejamento).
 
+### Simplificação de Orçamento e remoção de Suprimentos — entregue
+
+Dois ajustes no fluxo padrão, na mesma migração (`scripts/simplify-workflow-orcamento-suprimentos.ts`):
+etapa Orçamento perdeu os campos "Documentos do contrato" e "Observações do orçamento" —
+o valor de contrato (o que importa de verdade) é campo do cadastro da obra, não da etapa,
+e continua intocado; e a etapa Suprimentos foi removida por completo. `deleteStage`
+bloqueia exclusão enquanto alguma `StageAction.targetStageId` ainda aponta pra etapa — a
+ação "avancar" de Financeiro já usava `targetStageId: null` (cai no fallback "próxima
+etapa por `order`" do engine), então a remoção não precisou reapontar nada, só excluir e
+deixar o engine recalcular a ordem. Fluxo local ficou com 8 etapas.
+
+### Contas nomeadas em Orçamento (Erika e Thaina) — entregue
+
+Primeiro setor a sair do login único compartilhado: duas contas reais criadas via
+`createUser` (`scripts/create-orcamento-users.ts`), e-mails temporários
+(`erika.orcamento@sepeng.com.br`/`thaina.orcamento@sepeng.com.br` — trocar pelos e-mails
+reais depois em `/admin/usuarios`, assim que existirem) e senha única gerada por conta
+(16 caracteres, nunca a senha pública `obraflow123`). Outros setores continuam no login
+compartilhado por enquanto — não é um padrão que se espalhou sozinho pros demais.
+
+### Lembrete sem data — entregue
+
+Campo de prazo (`dueAt`) saiu do formulário "Novo lembrete" (`TasksSection.tsx`) — o
+lembrete conta como "enviado" no momento de criar (`processOutbox()` já rodava logo após
+`createTask`, então a notificação já saía quase na hora antes disso também). `dueAt`
+continua existindo no schema e no `Task` (lembretes antigos que já tinham prazo continuam
+mostrando "vencido" normalmente) — só não tem mais como definir um novo.
+
+### Diretoria vira redirect pro canvas — entregue
+
+Depois que uma obra chega em Diretoria, a única exigência agora é montar a equipe no
+canvas (`/obras/[id]/equipe`) — o formulário da etapa (campos "Quantidade de funcionários"
+e "Recursos necessários") foi removido de vez. Implementado como atributo **genérico e
+versionado** em `WorkflowStage`, não um `if (stage.key === 'diretoria')`:
+
+- `completionMode: "FORM" | "EXTERNAL"` (default `FORM`) + `externalCompletionPath`
+  (sub-rota sob `/obras/{projectId}/`, ex. `"equipe"`) + `externalCompletionLabel` (texto
+  do botão). `src/core/workflow/types.ts`/`engine.ts` só carregam esses 3 campos como
+  dado de passagem — nenhuma lógica de transição muda.
+- Etapa com `completionMode: "EXTERNAL"` troca `DynamicStageForm` por
+  `ExternalCompletionPanel` (`src/modules/projects/components/`) na página da obra: um
+  botão pro `externalCompletionPath` + qualquer ação que não seja `ADVANCE` (ex.
+  "Devolver") continua disponível ali mesmo, sem regressão.
+- `getPendingExternalCompletion` (`src/modules/projects/queries.ts`) é a ponte genérica:
+  dado `projectId` + uma rota, acha se existe etapa ativa em modo EXTERNAL apontando pra
+  ali que o ator atual tem permissão de executar (reaproveita `getAvailableActions`, mesma
+  autorização de sempre). `/obras/[id]/equipe` chama isso com `"equipe"` — não sabe que
+  "normalmente" é a Diretoria.
+- Botão "Enviar equipe" no canvas (`TeamPageShell.tsx`) só habilita com pelo menos um
+  cargo ocupado (`positions.some(p => p.professionalId)`). Chama `executeStageActionForm`
+  **direto** (mesmo padrão "Direct" de `assignProfessionalDirect`/`deletePositionDirect`
+  já usado nesta tela), não via `useActionState` + `<form>`.
+
+**Achado real durante a implementação**: com `useActionState`, o sucesso da ação faz o
+Next revalidar a rota atual automaticamente — no próximo render do servidor,
+`getPendingExternalCompletion` já não acha mais etapa pendente (Diretoria virou
+`COMPLETED`), `pendingCompletion` fica `null` e o botão desmonta. Isso competia com o
+`useEffect` que dispararia o toast/redirect, e o desmonte vencia a corrida — toast e
+redirecionamento simplesmente nunca aconteciam, sem erro nenhum no console. Resolvido
+chamando a Server Action direto no `onClick` (não bind por `<form>`): o aviso de sucesso
+roda na sequência do próprio clique, sem depender do componente continuar montado depois.
+
+Editor visual (`StageCard.tsx`) ainda não tem controles pra configurar `completionMode`
+por clique — só ganhou os 3 inputs ocultos necessários pra não resetar o valor da
+Diretoria ao salvar qualquer outro campo da etapa (mesma classe de bug já vista com
+`company`/`area`/`avatarUrl` do cadastro de profissionais). Configurar isso noutra etapa
+hoje exige script, igual `mode`/`joinPolicy` de bifurcação exigiam antes do editor
+alcançar — fast-follow natural, não bloqueou esta entrega.
+`scripts/enable-diretoria-external-completion.ts` é a migração que ligou isso pra
+Diretoria (e removeu os dois campos do formulário dela).
+
+### Auditoria de segurança (acesso) — levantamento feito, sem mudança de código
+
+A pedido, foi feito um levantamento (não uma correção) de: sessão via JWT do Auth.js
+(stateless — login simultâneo em quantos dispositivos quiser, sem visibilidade nem forma
+de derrubar uma sessão específica sem trocar `AUTH_SECRET` pra todo mundo); senha mínima
+de 8 caracteres sem exigência de complexidade, bcrypt custo 10, sem expiração/reuso;
+nenhum rate limiting no login (ponto de maior risco real — sem lib tipo Arcjet/Upstash);
+sem `maxAge` de sessão configurado (cai no padrão de 30 dias do NextAuth); sem fluxo de
+"esqueci minha senha" (reset só via admin em `/admin/usuarios`); verificação de e-mail não
+se aplica — não existe cadastro próprio, toda conta nasce criada por um admin. Nada disso
+foi alterado ainda — fica registrado pra priorização futura.
+
+### Rate limiting de login + cadastro próprio — entregue
+
+Fecha duas das lacunas do levantamento de segurança acima (rate limiting e "sem jeito de
+criar conta sozinho"), na mesma rodada.
+
+**Rate limiting**, direto no Postgres (sem Redis/serviço externo — `LoginAttempt`,
+`src/modules/auth/rate-limit.ts`): janela de 15 min, 5 falhas bloqueiam a mesma conta, 20
+falhas bloqueiam a mesma origem (IP, via `x-forwarded-for` — mais frouxo, um escritório
+inteiro pode compartilhar IP/NAT). Toda tentativa é gravada, sucesso ou falha — inclusive
+a que é recusada só pelo próprio rate limit, senão dava pra continuar tentando contra
+e-mails que nem existem sem nunca contar pro limite. `src/server/auth.ts` (`authorize`)
+chama isso antes de checar a senha e lança `RateLimitedSignin`/`EmailNotVerifiedSignin`
+(subclasses de `CredentialsSignin` do Auth.js v5, cada uma com um `code` próprio) pra
+`loginAction` (`src/app/login/actions.ts`) devolver mensagem específica em vez do genérico
+"e-mail ou senha incorretos".
+
+**Cadastro próprio** (`/cadastro`, `src/modules/auth/commands.ts:signUp`) — aberto a
+qualquer e-mail, mas a conta só entra depois de **duas** aprovações:
+
+1. Confirmar o e-mail (`User.emailVerifiedAt`, `EmailVerificationToken` — link de 24h,
+   uso único, `/verificar-email/[token]`).
+2. Um admin ativar em `/admin/usuarios` (`Membership.isActive`, mesmo toggle
+   `setUserActive` de sempre — zero mudança nele).
+
+Conta nasce com o papel `visualizador` (só leitura, já existia em `DEFAULT_ROLES`) — é o
+único papel que faz sentido pra alguém que ainda não foi verificado por humano nenhum.
+`signUp` não tem `actor` (quem cria a própria conta ainda não tem identidade) — auditoria
+grava com `actorId: null`, mesmo padrão do cron de SLA. Organização é resolvida por
+`findFirstOrThrow()` (hoje só existe a Sepeng — mesma simplificação pragmática que todo
+script de migração desta base já assume).
+
+**Conta criada por admin (`createUser`) passa a nascer com `emailVerifiedAt` já
+preenchido** — um admin que cadastra alguém já está vouching pelo e-mail, exigir
+confirmação depois não faria sentido. Isso também é o que evita quebrar login das contas
+já existentes: `scripts/backfill-email-verified.ts` preenche `emailVerifiedAt` de toda
+conta anterior à mudança (rodado local e produção) — sem isso, ninguém (nem admin@) logava
+mais depois do deploy.
+
+Dois eventos novos no outbox, mesmo padrão do `staff.assigned` (dispatch dedicado, não
+segue o `resolveRecipients` genérico por obra): `email_verification.requested` (e-mail via
+Resend, link de confirmação) e `signup.pending_approval` (notificação in-app pra todo
+mundo com `user:manage`, disparada só depois do e-mail confirmado — não faz sentido avisar
+admin de um cadastro que a própria pessoa pode nunca confirmar).
+
+**Cadastro não tenta logar sozinho** ao final: mostra uma mensagem fixa
+("verifique seu e-mail... depois aguarde aprovação") em vez de chamar `signIn`. Motivo:
+`getActor()`/`requireActor()` já checam `Membership.isActive` (não mudou nada ali) — se o
+cadastro tentasse logar automaticamente, a pessoa cairia num bounce estranho
+(login "funciona", mas todo `requireActor()` manda de volta pro `/login`) antes mesmo do
+e-mail estar confirmado. Descoberto e evitado durante o teste, não em produção.
+
+`NEXT_PUBLIC_APP_URL` é opcional — sem ela, `src/lib/url.ts` cai em
+`VERCEL_PROJECT_PRODUCTION_URL`/`VERCEL_URL` (injetadas automaticamente pela Vercel) ou
+`localhost:3000` em dev, pra montar o link absoluto do e-mail de confirmação.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
@@ -421,6 +562,16 @@ Jornal Sepeng e Estrutura da Equipe da Obra (a primeira tentativa de organograma
 — ver seção correspondente acima; a segunda, por obra e com drag-and-drop, é a que ficou).
 `RESEND_API_KEY` já está provisionado (Produção e Preview) e testado com envio real — falta
 só `EMAIL_FROM` com um domínio verificado na Resend pra sair de "só entrega em endereço de
-teste" pra "entrega em qualquer profissional real". Próximos candidatos sem ordem definida:
-paginação/filtros mais ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF
-da equipe da obra, e o que a Sepeng priorizar no uso real.
+teste" pra "entrega em qualquer profissional real". Uma terceira rodada simplificou
+Orçamento, removeu Suprimentos, criou as primeiras contas nomeadas por setor (Erika e
+Thaina), tirou a data do lembrete e trocou a etapa Diretoria por um redirect pro canvas de
+equipe (ver seções acima) — essas três primeiras rodadas já em produção (schema, dado e
+deploy aplicados). Uma quarta rodada entregou rate limiting de login e cadastro próprio
+(ver seção acima) — só local por enquanto, produção segue sem essas duas até deploy
+explícito.
+
+Próximos candidatos sem ordem definida: reset de senha ("esqueci minha senha" — a única
+lacuna do levantamento de segurança que ainda falta), controles no editor visual pra
+`completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais
+ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe da obra, e
+o que a Sepeng priorizar no uso real.

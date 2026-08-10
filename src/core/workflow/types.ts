@@ -67,6 +67,12 @@ export interface StageDef {
   isInitial: boolean;
   isFinal: boolean;
   color: string;
+  /** FORM (padrão) mostra `DynamicStageForm`; EXTERNAL redireciona pra outra rota. */
+  completionMode: "FORM" | "EXTERNAL";
+  /** Sub-rota sob /obras/{projectId}/ quando completionMode = EXTERNAL. */
+  externalCompletionPath: string | null;
+  /** Texto do botão de redirect. */
+  externalCompletionLabel: string | null;
   fields: StageFieldDef[];
   actions: StageActionDef[];
 }

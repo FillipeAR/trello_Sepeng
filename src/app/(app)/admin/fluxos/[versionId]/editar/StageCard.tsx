@@ -64,6 +64,9 @@ export interface StageData {
   isInitial: boolean;
   isFinal: boolean;
   color: string;
+  completionMode: string;
+  externalCompletionPath: string | null;
+  externalCompletionLabel: string | null;
   fields: StageFieldData[];
   actions: StageActionData[];
   transitions: StageTransitionData[];
@@ -170,6 +173,12 @@ export function StageCard({
       <form action={formAction} className="space-y-4">
         <input type="hidden" name="versionId" value={versionId} />
         <input type="hidden" name="stageId" value={stage.id} />
+        {/* Preserva atributos sem controle nesta tela ainda — sem isso, salvar qualquer
+            campo aqui reverteria a etapa pro modo FORM em silêncio (mesma classe de bug
+            já vista com company/area/avatarUrl em ProfessionalsList.tsx). */}
+        <input type="hidden" name="completionMode" value={stage.completionMode} />
+        <input type="hidden" name="externalCompletionPath" value={stage.externalCompletionPath ?? ""} />
+        <input type="hidden" name="externalCompletionLabel" value={stage.externalCompletionLabel ?? ""} />
         <ErrorBanner errors={state.errors} />
         <StageFieldSet departments={departments} fieldErrors={state.fieldErrors} defaults={stage} />
         <button type="submit" disabled={pending} className="btn-ghost">

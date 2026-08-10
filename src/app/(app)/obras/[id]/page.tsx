@@ -13,6 +13,7 @@ import { getProjectDocuments } from "@/modules/documents/queries";
 import { getProjectPurchaseOrders, listSuppliers } from "@/modules/procurement/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
+import { ExternalCompletionPanel } from "@/modules/projects/components/ExternalCompletionPanel";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
 import { CommentsSection } from "@/modules/projects/components/CommentsSection";
 import { MeasurementsSection } from "@/modules/projects/components/MeasurementsSection";
@@ -173,16 +174,20 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
 
         <div className="space-y-6">
           {activeStages.length > 0 ? (
-            activeStages.map(({ stage, actions }) => (
-              <DynamicStageForm
-                key={stage.id}
-                projectId={project.id}
-                stage={stage}
-                actions={actions}
-                users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
-                professionals={professionals.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
-              />
-            ))
+            activeStages.map(({ stage, actions }) =>
+              stage.completionMode === "EXTERNAL" ? (
+                <ExternalCompletionPanel key={stage.id} projectId={project.id} stage={stage} actions={actions} />
+              ) : (
+                <DynamicStageForm
+                  key={stage.id}
+                  projectId={project.id}
+                  stage={stage}
+                  actions={actions}
+                  users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
+                  professionals={professionals.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+                />
+              ),
+            )
           ) : (
             <div className="card p-6">
               <h2 className="text-sm font-semibold">Obra finalizada</h2>

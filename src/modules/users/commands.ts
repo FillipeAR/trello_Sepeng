@@ -77,7 +77,10 @@ export async function createUser(actor: SessionContext, input: { data: unknown }
 
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
-      data: { name: data.name, email, passwordHash },
+      // Admin criou = admin está vouching pelo e-mail. Sem isso, conta criada aqui
+      // ficaria bloqueada no login pela mesma checagem que existe pro cadastro
+      // próprio (`src/modules/auth/commands.ts:signUp`).
+      data: { name: data.name, email, passwordHash, emailVerifiedAt: new Date() },
     });
 
     await tx.membership.create({

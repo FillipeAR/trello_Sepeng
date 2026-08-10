@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActor } from "@/server/actor";
 import { LoginForm } from "./LoginForm";
@@ -27,6 +28,12 @@ export default async function LoginPage() {
             </p>
           </div>
           <LoginForm />
+          <p className="mt-6 text-center text-sm text-muted">
+            Não tem conta?{" "}
+            <Link href="/cadastro" className="text-primary hover:underline">
+              Criar conta
+            </Link>
+          </p>
         </div>
 
         <div className="card p-8">

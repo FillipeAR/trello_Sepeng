@@ -22,6 +22,10 @@ export const DOMAIN_EVENTS = {
   DOCUMENT_EXPIRED: "document.expired",
   /** Profissional (STAFF) selecionado num campo de etapa da obra. */
   STAFF_ASSIGNED: "staff.assigned",
+  /** Cadastro próprio (`/cadastro`) — link de confirmação de e-mail. */
+  EMAIL_VERIFICATION_REQUESTED: "email_verification.requested",
+  /** E-mail confirmado num cadastro próprio — falta aprovação de um admin. */
+  SIGNUP_PENDING_APPROVAL: "signup.pending_approval",
 } as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];

@@ -39,6 +39,9 @@ export async function loadSnapshot(
     isInitial: s.isInitial,
     isFinal: s.isFinal,
     color: s.color,
+    completionMode: s.completionMode,
+    externalCompletionPath: s.externalCompletionPath,
+    externalCompletionLabel: s.externalCompletionLabel,
     fields: s.fields.map((f) => ({
       id: f.id,
       key: f.key,

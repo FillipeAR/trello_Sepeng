@@ -104,17 +104,14 @@ function NewTaskForm({
     <form ref={formRef} action={formAction} className="space-y-2 rounded-lg border border-dashed border-border p-3">
       <input type="hidden" name="projectId" value={projectId} />
       <input name="title" required placeholder="Novo lembrete — ex.: Ligar pro fornecedor" className="input" />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <select name="assigneeId" defaultValue="" className="input">
-          <option value="">Sem responsável específico</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
-        <input name="dueAt" type="date" className="input" />
-      </div>
+      <select name="assigneeId" defaultValue="" className="input">
+        <option value="">Sem responsável específico</option>
+        {users.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name}
+          </option>
+        ))}
+      </select>
       <textarea name="description" rows={2} placeholder="Detalhes (opcional)" className="input" />
       {state.errors?.length ? (
         <p className="text-xs text-danger">{state.errors.join(" ")}</p>

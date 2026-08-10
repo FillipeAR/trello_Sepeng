@@ -79,6 +79,9 @@ function stageDataFromForm(formData: FormData) {
     isInitial: bool(formData, "isInitial"),
     isFinal: bool(formData, "isFinal"),
     color: str(formData, "color") || "#64748b",
+    completionMode: (str(formData, "completionMode") || "FORM") as "FORM" | "EXTERNAL",
+    externalCompletionPath: nullableStr(formData, "externalCompletionPath"),
+    externalCompletionLabel: nullableStr(formData, "externalCompletionLabel"),
   };
 }
 

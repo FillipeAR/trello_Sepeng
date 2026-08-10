@@ -366,6 +366,60 @@ export async function getProjectDetail(actor: SessionContext, projectId: string)
 }
 
 /**
+ * Existe alguma etapa ativa desta obra configurada pra terminar numa rota
+ * externa (`completionMode: "EXTERNAL"`), apontando pra `path`, que o ator
+ * atual tem permissão de executar? Genérico por design — não sabe que
+ * "path" costuma ser "equipe" nem que a etapa costuma ser Diretoria; só
+ * repassa a mesma autorização que `DynamicStageForm` já usa
+ * (`getAvailableActions`, que aplica `canActOnStage` por baixo).
+ */
+export async function getPendingExternalCompletion(
+  actor: SessionContext,
+  projectId: string,
+  path: string,
+): Promise<{ stageId: string; actionKey: string; label: string } | null> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, organizationId: actor.organizationId, deletedAt: null },
+    include: {
+      workflow: true,
+      team: { select: { userId: true } },
+      stageInstances: {
+        where: { status: { in: ["PENDING", "IN_PROGRESS"] } },
+        select: { stageId: true },
+      },
+    },
+  });
+  if (!project?.workflow) return null;
+
+  const snapshot = await loadSnapshot(project.workflow.workflowVersionId);
+
+  const visitedDepartmentIds = snapshot.stages
+    .filter((s) => project.stageInstances.some((si) => si.stageId === s.id))
+    .map((s) => s.departmentId)
+    .filter((d): d is string => Boolean(d));
+
+  const allowed = canReadProject(actor, {
+    visitedDepartmentIds,
+    assignedUserIds: project.team.map((t) => t.userId),
+  });
+  if (!allowed) return null;
+
+  for (const si of project.stageInstances) {
+    const stage = snapshot.stages.find((s) => s.id === si.stageId);
+    if (!stage || stage.completionMode !== "EXTERNAL" || stage.externalCompletionPath !== path) continue;
+
+    const action = getAvailableActions(snapshot, stage.id, actor).find(
+      (a) => a.kind === "ADVANCE" && a.enabled,
+    );
+    if (!action) continue;
+
+    return { stageId: stage.id, actionKey: action.key, label: action.label };
+  }
+
+  return null;
+}
+
+/**
  * Fila pessoal: obras com alguma etapa ativa no departamento do usuário. Uso
  * interno (widget do dashboard, `/minhas-tarefas`), não a listagem paginada
  * — busca um lote generoso de uma vez em vez de paginar, fila de

@@ -1,5 +1,6 @@
 import { prisma } from "@/server/db";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { getAppUrl } from "@/lib/url";
 import { DOMAIN_EVENTS, type DomainEventType } from "@/server/outbox";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { resolveChannelEnabled } from "@/core/notifications/preferences";
@@ -41,6 +42,11 @@ interface EventPayload {
   /** staff.assigned — profissional (sem login) selecionado numa obra. */
   professionalId?: string;
   contextLabel?: string;
+  /** email_verification.requested / signup.pending_approval — cadastro próprio. */
+  userId?: string;
+  name?: string;
+  email?: string;
+  token?: string;
 }
 
 function describe(type: string, p: EventPayload): { title: string; body: string } {
@@ -235,6 +241,61 @@ async function dispatchStaffAssignedEmail(payload: EventPayload): Promise<void> 
   }
 }
 
+/**
+ * `email_verification.requested` — cadastro próprio (`/cadastro`). A pessoa ainda
+ * não consegue logar (sem `Notification` in-app possível), então o link só chega
+ * por e-mail.
+ */
+async function dispatchEmailVerificationEmail(payload: EventPayload): Promise<void> {
+  if (!payload.email || !payload.token) return;
+
+  const link = `${getAppUrl()}/verificar-email/${payload.token}`;
+  const subject = "Confirme seu e-mail — ObraFlow";
+  const html = `
+    <p>Olá, ${payload.name ?? ""},</p>
+    <p>Confirme seu e-mail pra continuar o cadastro no ObraFlow:</p>
+    <p><a href="${link}">${link}</a></p>
+    <p>Depois de confirmar, um administrador ainda precisa liberar seu acesso.</p>
+    <p>Se você não pediu esse cadastro, ignore este e-mail.</p>
+  `;
+
+  try {
+    await sendEmail(payload.email, subject, html);
+  } catch (error) {
+    console.error(`Falha ao enviar e-mail de verificação (usuário ${payload.userId}):`, error);
+  }
+}
+
+/**
+ * `signup.pending_approval` — e-mail já confirmado, falta um admin aprovar em
+ * `/admin/usuarios`. Avisa in-app quem tem `user:manage` — não é sobre uma obra,
+ * então não segue `resolveRecipients` (que é por departamento/equipe da obra).
+ */
+async function dispatchSignupPendingApproval(organizationId: string, payload: EventPayload): Promise<void> {
+  if (!payload.name || !payload.email) return;
+
+  const admins = await prisma.membership.findMany({
+    where: {
+      organizationId,
+      isActive: true,
+      role: { permissions: { some: { permission: { key: PERMISSIONS.USER_MANAGE } } } },
+    },
+    select: { userId: true },
+  });
+  if (admins.length === 0) return;
+
+  await prisma.notification.createMany({
+    data: admins.map((a) => ({
+      organizationId,
+      userId: a.userId,
+      type: DOMAIN_EVENTS.SIGNUP_PENDING_APPROVAL,
+      title: "Novo cadastro aguardando aprovação",
+      body: `${payload.name} (${payload.email}) confirmou o e-mail e espera liberação de acesso.`,
+      linkUrl: "/admin/usuarios",
+    })),
+  });
+}
+
 export async function processOutbox(limit = 50): Promise<number> {
   const events = await prisma.outboxEvent.findMany({
     where: { status: "PENDING", availableAt: { lte: new Date() } },
@@ -250,6 +311,10 @@ export async function processOutbox(limit = 50): Promise<number> {
 
       if (event.type === DOMAIN_EVENTS.STAFF_ASSIGNED) {
         await dispatchStaffAssignedEmail(payload);
+      } else if (event.type === DOMAIN_EVENTS.EMAIL_VERIFICATION_REQUESTED) {
+        await dispatchEmailVerificationEmail(payload);
+      } else if (event.type === DOMAIN_EVENTS.SIGNUP_PENDING_APPROVAL) {
+        await dispatchSignupPendingApproval(event.organizationId, payload);
       } else {
         const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
         const { title, body } = describe(event.type, payload);
