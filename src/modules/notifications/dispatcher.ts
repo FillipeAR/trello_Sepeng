@@ -1,9 +1,10 @@
 import { prisma } from "@/server/db";
-import { formatDate, formatDateTime } from "@/lib/format";
 import { getAppUrl } from "@/lib/url";
 import { DOMAIN_EVENTS, type DomainEventType } from "@/server/outbox";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { resolveChannelEnabled } from "@/core/notifications/preferences";
+import { describe, type EventPayload } from "@/core/notifications/describe";
+import { createAutoNewsPost } from "@/modules/news/commands";
 import { sendWhatsAppMessage } from "./whatsapp";
 import { sendEmail } from "./email";
 
@@ -14,122 +15,6 @@ import { sendEmail } from "./email";
  * evento inteiro: se derrubasse, o retry recriaria as notificações in-app já
  * gravadas via `createMany` (não é idempotente a esse nível).
  */
-
-interface EventPayload {
-  projectId: string;
-  projectName: string;
-  projectCode: string;
-  stageId?: string | null;
-  stageName?: string | null;
-  fromStageName?: string | null;
-  departmentId?: string | null;
-  displayStatus?: string;
-  actorName?: string;
-  taskId?: string;
-  taskTitle?: string;
-  dueAt?: string | null;
-  assigneeId?: string;
-  commentId?: string;
-  excerpt?: string;
-  mentionedUserIds?: string[];
-  /** Destinatário único de um evento pessoal (ex.: medição decidida — avisa quem registrou). */
-  recipientId?: string;
-  measurementReferenceDate?: string;
-  measuredValue?: string;
-  rejectionReason?: string;
-  documentType?: string;
-  documentExpiresAt?: string;
-  /** staff.assigned — profissional (sem login) selecionado numa obra. */
-  professionalId?: string;
-  contextLabel?: string;
-  /** email_verification.requested / signup.pending_approval — cadastro próprio. */
-  userId?: string;
-  name?: string;
-  email?: string;
-  token?: string;
-}
-
-function describe(type: string, p: EventPayload): { title: string; body: string } {
-  switch (type) {
-    case DOMAIN_EVENTS.PROJECT_CREATED:
-      return {
-        title: `Nova obra: ${p.projectName}`,
-        body: `${p.projectCode} foi cadastrada e está em "${p.displayStatus}".`,
-      };
-    case DOMAIN_EVENTS.STAGE_ENTERED:
-      return {
-        title: `${p.projectName} chegou em ${p.stageName}`,
-        body: `${p.actorName ?? "Um usuário"} concluiu ${p.fromStageName}. Status: "${p.displayStatus}".`,
-      };
-    case DOMAIN_EVENTS.STAGE_RETURNED:
-      return {
-        title: `${p.projectName} foi devolvida para ${p.stageName}`,
-        body: `${p.actorName ?? "Um usuário"} devolveu a obra a partir de ${p.fromStageName}.`,
-      };
-    case DOMAIN_EVENTS.PROJECT_REJECTED:
-      return {
-        title: `${p.projectName} foi reprovada`,
-        body: `Reprovação registrada em ${p.fromStageName} por ${p.actorName ?? "um usuário"}.`,
-      };
-    case DOMAIN_EVENTS.PROJECT_FINISHED:
-      return {
-        title: `${p.projectName} foi finalizada`,
-        body: `A obra ${p.projectCode} concluiu o fluxo completo.`,
-      };
-    case DOMAIN_EVENTS.TASK_ASSIGNED:
-      return {
-        title: `Novo lembrete: ${p.taskTitle}`,
-        body: `${p.actorName ?? "Alguém"} atribuiu um lembrete pra você em ${p.projectName}${
-          p.dueAt ? ` — prazo ${formatDateTime(p.dueAt)}` : ""
-        }.`,
-      };
-    case DOMAIN_EVENTS.MENTION_CREATED:
-      return {
-        title: `${p.actorName ?? "Alguém"} mencionou você em ${p.projectName}`,
-        body: p.excerpt ?? "Você foi marcado num comentário.",
-      };
-    case DOMAIN_EVENTS.SLA_BREACHED:
-      return {
-        title: `SLA vencido: ${p.projectName}`,
-        body: `A etapa "${p.stageName}" está com o prazo estourado${
-          p.dueAt ? ` desde ${formatDateTime(p.dueAt)}` : ""
-        }.`,
-      };
-    case DOMAIN_EVENTS.MEASUREMENT_APPROVED:
-      return {
-        title: `Medição aprovada: ${p.projectName}`,
-        body: `${p.actorName ?? "Alguém"} aprovou a medição de ${
-          p.measurementReferenceDate ? formatDateTime(p.measurementReferenceDate) : "referência"
-        } (${p.measuredValue ?? "—"}).`,
-      };
-    case DOMAIN_EVENTS.MEASUREMENT_REJECTED:
-      return {
-        title: `Medição reprovada: ${p.projectName}`,
-        body: `${p.actorName ?? "Alguém"} reprovou a medição de ${
-          p.measurementReferenceDate ? formatDateTime(p.measurementReferenceDate) : "referência"
-        }${p.rejectionReason ? ` — ${p.rejectionReason}` : ""}.`,
-      };
-    case DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON:
-      return {
-        title: `Documento vencendo: ${p.projectName}`,
-        body: `"${p.documentType}" vence em ${
-          p.documentExpiresAt ? formatDate(p.documentExpiresAt) : "breve"
-        } — providencie a renovação.`,
-      };
-    case DOMAIN_EVENTS.DOCUMENT_EXPIRED:
-      return {
-        title: `Documento vencido: ${p.projectName}`,
-        body: `"${p.documentType}" venceu em ${
-          p.documentExpiresAt ? formatDate(p.documentExpiresAt) : "data passada"
-        }.`,
-      };
-    default:
-      return {
-        title: p.projectName,
-        body: `Evento ${type} registrado.`,
-      };
-  }
-}
 
 /** Quem precisa saber: o departamento que recebeu a obra e a equipe alocada. */
 async function resolveRecipients(
@@ -201,7 +86,12 @@ async function dispatchWhatsApp(
   });
 
   for (const user of users) {
-    const enabled = resolveChannelEnabled(prefs, type, "WHATSAPP", { hasPhone: Boolean(user.phone) });
+    // `prefs` é o lote de todos os destinatários — filtra pro usuário desta
+    // iteração antes de resolver, senão a preferência de um usuário vaza pra
+    // outro que nunca configurou nada (resolveChannelEnabled não sabe de quem
+    // é cada linha, só recebe o que já veio filtrado).
+    const userPrefs = prefs.filter((p) => p.userId === user.id);
+    const enabled = resolveChannelEnabled(userPrefs, type, "WHATSAPP", { hasPhone: Boolean(user.phone) });
     if (!enabled || !user.phone) continue;
     try {
       await sendWhatsAppMessage(user.phone, title, body);
@@ -238,6 +128,119 @@ async function dispatchStaffAssignedEmail(payload: EventPayload): Promise<void> 
     await sendEmail(professional.email, subject, html);
   } catch (error) {
     console.error(`Falha ao enviar e-mail de seleção (profissional ${payload.professionalId}):`, error);
+  }
+}
+
+/**
+ * `project.created` — além do fluxo genérico (notificação in-app pro
+ * departamento dono da etapa inicial + equipe alocada), toda obra nova
+ * também avisa por e-mail uma lista fixa curada por admin
+ * (`ExternalNotificationRecipient`, `/admin/avisos-externos`) — gente que
+ * precisa saber que uma obra foi ganha mesmo sem ter login ou departamento
+ * no sistema. Incondicional, mesmo padrão de `dispatchStaffAssignedEmail`
+ * (não é opt-in por usuário).
+ */
+async function dispatchExternalProjectCreatedEmail(
+  organizationId: string,
+  payload: EventPayload,
+): Promise<void> {
+  const recipients = await prisma.externalNotificationRecipient.findMany({
+    where: { organizationId, deletedAt: null },
+    select: { email: true, name: true },
+  });
+  if (recipients.length === 0) return;
+
+  const subject = `Obra ganha: ${payload.projectName}`;
+  const html = `
+    <p>Olá,</p>
+    <p>A obra <strong>${payload.projectName}</strong> (${payload.projectCode}) acaba de ser
+    cadastrada no ObraFlow — status "${payload.displayStatus ?? "Obra Ganha"}".</p>
+    <p>Este é um aviso informativo — você não precisa acessar o sistema.</p>
+  `;
+
+  for (const recipient of recipients) {
+    try {
+      await sendEmail(recipient.email, subject, html);
+    } catch (error) {
+      console.error(`Falha ao enviar e-mail de obra ganha (contato ${recipient.email}):`, error);
+    }
+  }
+}
+
+/**
+ * `stage.milestone_reached` — além do fluxo genérico (mesma notificação in-app
+ * que `stage.entered` já geraria), publica automaticamente no Jornal Sepeng
+ * quando a etapa alvo está marcada como marco (`WorkflowStage.postsToJournal`).
+ * `createAutoNewsPost` é idempotente por `sourceEventId` — reprocessar este
+ * evento não duplica o post.
+ */
+async function dispatchStageMilestoneNews(
+  organizationId: string,
+  eventId: string,
+  payload: EventPayload,
+): Promise<void> {
+  if (!payload.actorId) return;
+
+  const { title, body } = describe(DOMAIN_EVENTS.STAGE_MILESTONE_REACHED, payload);
+
+  try {
+    await createAutoNewsPost({
+      organizationId,
+      authorId: payload.actorId,
+      sourceEventId: eventId,
+      title,
+      body,
+    });
+  } catch (error) {
+    console.error(`Falha ao publicar post automático no Jornal (evento ${eventId}):`, error);
+  }
+}
+
+/**
+ * `news.published` — não segue `resolveRecipients` (que é escopado a
+ * departamento/equipe de uma obra específica; o Jornal é org-wide) nem gera
+ * `Notification` in-app (a página /jornal já é a superfície de leitura
+ * "pull"). Só e-mail, só pra quem ligou a preferência em `/notificacoes`
+ * (opt-in — sem linha explícita, `resolveChannelEnabled` mantém desligado).
+ */
+async function dispatchNewsEmail(organizationId: string, payload: EventPayload): Promise<void> {
+  if (!payload.newsPostId) return;
+
+  const post = await prisma.newsPost.findUnique({
+    where: { id: payload.newsPostId },
+    select: { title: true, body: true },
+  });
+  if (!post) return;
+
+  const members = await prisma.membership.findMany({
+    where: { organizationId, isActive: true },
+    select: { userId: true },
+  });
+  if (members.length === 0) return;
+
+  const userIds = members.map((m) => m.userId);
+  const [users, prefs] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, email: true } }),
+    prisma.notificationPreference.findMany({
+      where: { userId: { in: userIds }, eventType: DOMAIN_EVENTS.NEWS_PUBLISHED, channel: "EMAIL" },
+    }),
+  ]);
+
+  const subject = `Jornal Sepeng: ${post.title}`;
+  const html = `
+    <h2>${post.title}</h2>
+    <div>${post.body}</div>
+  `;
+
+  for (const user of users) {
+    const userPrefs = prefs.filter((p) => p.userId === user.id);
+    const enabled = resolveChannelEnabled(userPrefs, DOMAIN_EVENTS.NEWS_PUBLISHED, "EMAIL", { hasPhone: true });
+    if (!enabled) continue;
+    try {
+      await sendEmail(user.email, subject, html);
+    } catch (error) {
+      console.error(`Falha ao enviar e-mail do Jornal (usuário ${user.id}):`, error);
+    }
   }
 }
 
@@ -315,6 +318,8 @@ export async function processOutbox(limit = 50): Promise<number> {
         await dispatchEmailVerificationEmail(payload);
       } else if (event.type === DOMAIN_EVENTS.SIGNUP_PENDING_APPROVAL) {
         await dispatchSignupPendingApproval(event.organizationId, payload);
+      } else if (event.type === DOMAIN_EVENTS.NEWS_PUBLISHED) {
+        await dispatchNewsEmail(event.organizationId, payload);
       } else {
         const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
         const { title, body } = describe(event.type, payload);
@@ -332,6 +337,14 @@ export async function processOutbox(limit = 50): Promise<number> {
           });
 
           await dispatchWhatsApp(event.type as DomainEventType, recipients, title, body);
+        }
+
+        if (event.type === DOMAIN_EVENTS.PROJECT_CREATED) {
+          await dispatchExternalProjectCreatedEmail(event.organizationId, payload);
+        }
+
+        if (event.type === DOMAIN_EVENTS.STAGE_MILESTONE_REACHED) {
+          await dispatchStageMilestoneNews(event.organizationId, event.id, payload);
         }
       }
 

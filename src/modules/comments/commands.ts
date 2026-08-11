@@ -103,6 +103,7 @@ export async function createComment(
       await enqueueEvent(tx, {
         organizationId: actor.organizationId,
         type: DOMAIN_EVENTS.MENTION_CREATED,
+        projectId: project.id,
         payload: {
           projectId: project.id,
           projectName: project.name,

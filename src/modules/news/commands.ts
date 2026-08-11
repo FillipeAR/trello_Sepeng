@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/core/rbac/permissions";
 import type { SessionContext } from "@/server/actor";
 import { prisma } from "@/server/db";
 import { writeAudit } from "@/server/audit";
+import { DOMAIN_EVENTS, enqueueEvent } from "@/server/outbox";
 import { CommandError } from "@/modules/projects/commands";
 
 /** Jornal Sepeng — notícias da empresa. Publicar exige `news:manage`; ler é aberto a todo mundo. */
@@ -45,6 +46,66 @@ export async function createNewsPost(actor: SessionContext, input: { data: unkno
       entityId: post.id,
       summary: `Notícia "${post.title}" publicada no Jornal Sepeng.`,
       after: post,
+    });
+
+    await enqueueEvent(tx, {
+      organizationId: actor.organizationId,
+      type: DOMAIN_EVENTS.NEWS_PUBLISHED,
+      payload: { newsPostId: post.id, newsTitle: post.title },
+      idempotencyKey: `${DOMAIN_EVENTS.NEWS_PUBLISHED}:${post.id}`,
+    });
+
+    return post;
+  });
+}
+
+/**
+ * Post automático disparado por um marco do fluxo (`WorkflowStage.postsToJournal`,
+ * ver `executeStageAction`/`createProject`), não por um admin publicando à mão —
+ * por isso não passa por `requireManage`: quem avançou a etapa pode não ter
+ * `news:manage`, e o post é efeito colateral do sistema, não uma ação editorial
+ * pessoal (regra do outbox: efeito colateral nasce fora do command handler que
+ * mudou o estado da obra, no worker). `sourceEventId` é o id do `OutboxEvent`
+ * de origem (`stage.milestone_reached`) — se o worker reprocessar o mesmo
+ * evento (retry após falha antes de marcar DONE), este comando é idempotente:
+ * não duplica o post.
+ */
+export async function createAutoNewsPost(args: {
+  organizationId: string;
+  authorId: string;
+  sourceEventId: string;
+  title: string;
+  body: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.newsPost.findUnique({ where: { sourceEventId: args.sourceEventId } });
+    if (existing) return existing;
+
+    const post = await tx.newsPost.create({
+      data: {
+        organizationId: args.organizationId,
+        authorId: args.authorId,
+        title: args.title,
+        body: args.body,
+        sourceEventId: args.sourceEventId,
+      },
+    });
+
+    await writeAudit(tx, {
+      organizationId: args.organizationId,
+      actorId: args.authorId,
+      action: "news.auto_created",
+      entityType: "NewsPost",
+      entityId: post.id,
+      summary: `Notícia "${post.title}" publicada automaticamente no Jornal Sepeng (marco do fluxo).`,
+      after: post,
+    });
+
+    await enqueueEvent(tx, {
+      organizationId: args.organizationId,
+      type: DOMAIN_EVENTS.NEWS_PUBLISHED,
+      payload: { newsPostId: post.id, newsTitle: post.title },
+      idempotencyKey: `${DOMAIN_EVENTS.NEWS_PUBLISHED}:${post.id}`,
     });
 
     return post;

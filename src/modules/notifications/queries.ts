@@ -29,6 +29,13 @@ export interface MyNotificationSettings {
     label: string;
     channels: Record<NotificationChannel, boolean>;
   }[];
+  /**
+   * Único evento com opt-in por e-mail hoje (Jornal Sepeng) — fica fora da
+   * matriz genérica `rows` de propósito: colocar EMAIL em `CONFIGURABLE_CHANNELS`
+   * criaria um toggle pra todo evento, mas só news.published tem dispatcher de
+   * e-mail de verdade (ver dispatcher.ts).
+   */
+  newsEmailEnabled: boolean;
 }
 
 export async function getMyNotificationSettings(actor: SessionContext): Promise<MyNotificationSettings> {
@@ -50,5 +57,7 @@ export async function getMyNotificationSettings(actor: SessionContext): Promise<
     ) as Record<NotificationChannel, boolean>,
   }));
 
-  return { phone: user.phone, rows };
+  const newsEmailEnabled = resolveChannelEnabled(prefs, DOMAIN_EVENTS.NEWS_PUBLISHED, "EMAIL", { hasPhone: true });
+
+  return { phone: user.phone, rows, newsEmailEnabled };
 }

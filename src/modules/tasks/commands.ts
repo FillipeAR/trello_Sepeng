@@ -114,6 +114,7 @@ export async function createTask(actor: SessionContext, input: { projectId: stri
       await enqueueEvent(tx, {
         organizationId: actor.organizationId,
         type: DOMAIN_EVENTS.TASK_ASSIGNED,
+        projectId: project.id,
         payload: {
           projectId: project.id,
           projectName: project.name,

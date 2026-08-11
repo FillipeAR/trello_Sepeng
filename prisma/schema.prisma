@@ -147,6 +147,7 @@ model Organization {
   professionals Professional[]
   newsPosts     NewsPost[]
   teamPositions TeamPosition[]
+  externalNotificationRecipients ExternalNotificationRecipient[]
 
   @@map("organizations")
 }
@@ -222,6 +223,12 @@ model NewsPost {
   title          String
   body           String
   imageUrl       String?
+  /// Preenchido só em posts gerados automaticamente por um marco do fluxo
+  /// (ver WorkflowStage.postsToJournal) — id do OutboxEvent de origem
+  /// (stage.milestone_reached), usado como trava de idempotência: se o
+  /// worker reprocessar o mesmo evento, não duplica o post. Nulo em post
+  /// manual (criado por um admin em /jornal).
+  sourceEventId  String?   @unique
   publishedAt    DateTime  @default(now())
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -232,6 +239,24 @@ model NewsPost {
 
   @@index([organizationId, deletedAt, publishedAt])
   @@map("news_posts")
+}
+
+/// Lista curada por admin de contatos (dentro ou fora do sistema, sem
+/// relação com User/Professional) que recebem e-mail sempre que uma obra
+/// nova é criada ("Obra Ganha") — distribuição fixa, não é opt-in.
+model ExternalNotificationRecipient {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  email          String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, deletedAt])
+  @@map("external_notification_recipients")
 }
 
 model User {
@@ -455,6 +480,10 @@ model WorkflowStage {
   externalCompletionPath  String?
   /// Texto do botão de redirect na página da obra. Ex.: "Ir para Equipe da Obra".
   externalCompletionLabel String?
+  /// Quando true, entrar nesta etapa publica automaticamente um post no
+  /// Jornal Sepeng (marco do fluxo) — ver stage.milestone_reached e
+  /// createAutoNewsPost. Default false: nem toda etapa é notícia.
+  postsToJournal          Boolean             @default(false)
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
 
@@ -949,6 +978,11 @@ model NotificationPreference {
 model OutboxEvent {
   id             String       @id @default(cuid())
   organizationId String
+  /// Denormalizado do payload quando o evento é sobre uma obra específica —
+  /// permite consultar "todos os eventos da obra X" (feed de atualizações,
+  /// ver src/modules/projects/activity.ts) sem varrer o Json. Nulo para
+  /// eventos que não são de obra (ex.: cadastro/verificação de e-mail).
+  projectId      String?
   type           String
   payload        Json
   status         OutboxStatus @default(PENDING)
@@ -962,6 +996,7 @@ model OutboxEvent {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([status, availableAt])
+  @@index([organizationId, projectId, createdAt])
   @@map("outbox_events")
 }
 

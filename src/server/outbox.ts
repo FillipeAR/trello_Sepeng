@@ -6,29 +6,11 @@ import type { JsonValue, Tx } from "./db";
  * evento junto da transição, e um worker separado entrega. Plugar um canal novo
  * (V2) não toca em nenhuma regra de negócio.
  */
-export const DOMAIN_EVENTS = {
-  PROJECT_CREATED: "project.created",
-  STAGE_ENTERED: "stage.entered",
-  STAGE_COMPLETED: "stage.completed",
-  STAGE_RETURNED: "stage.returned",
-  PROJECT_REJECTED: "project.rejected",
-  PROJECT_FINISHED: "project.finished",
-  TASK_ASSIGNED: "task.assigned",
-  MENTION_CREATED: "mention.created",
-  SLA_BREACHED: "sla.breached",
-  MEASUREMENT_APPROVED: "measurement.approved",
-  MEASUREMENT_REJECTED: "measurement.rejected",
-  DOCUMENT_EXPIRING_SOON: "document.expiring_soon",
-  DOCUMENT_EXPIRED: "document.expired",
-  /** Profissional (STAFF) selecionado num campo de etapa da obra. */
-  STAFF_ASSIGNED: "staff.assigned",
-  /** Cadastro próprio (`/cadastro`) — link de confirmação de e-mail. */
-  EMAIL_VERIFICATION_REQUESTED: "email_verification.requested",
-  /** E-mail confirmado num cadastro próprio — falta aprovação de um admin. */
-  SIGNUP_PENDING_APPROVAL: "signup.pending_approval",
-} as const;
+import { DOMAIN_EVENTS } from "@/core/notifications/events";
+import type { DomainEventType } from "@/core/notifications/events";
 
-export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];
+export { DOMAIN_EVENTS };
+export type { DomainEventType };
 
 export async function enqueueEvent(
   tx: Tx,
@@ -36,6 +18,9 @@ export async function enqueueEvent(
     organizationId: string;
     type: DomainEventType;
     payload: Record<string, unknown>;
+    /** Presente quando o evento é sobre uma obra específica — grava a coluna
+     * denormalizada `OutboxEvent.projectId` (ver comentário no schema). */
+    projectId?: string;
     /** Chave estável evita evento duplicado se o comando for reexecutado. */
     idempotencyKey?: string;
   },
@@ -43,6 +28,7 @@ export async function enqueueEvent(
   return tx.outboxEvent.create({
     data: {
       organizationId: input.organizationId,
+      projectId: input.projectId,
       type: input.type,
       payload: input.payload as JsonValue,
       idempotencyKey: input.idempotencyKey ?? `${input.type}:${randomUUID()}`,

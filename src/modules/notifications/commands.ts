@@ -13,10 +13,9 @@ import { CommandError } from "@/modules/projects/commands";
  */
 
 const EVENT_TYPES = Object.values(DOMAIN_EVENTS);
-// Só WHATSAPP tem envio de verdade implementado por enquanto (ver dispatcher.ts).
-// E-mail entra como canal quando a Fase 1 ganhar esse envio; o dado (enum,
-// NotificationPreference) já é genérico, só falta o adapter.
-const CHANNELS = ["WHATSAPP"] as const;
+// EMAIL só é oferecido pro evento news.published (ver NewsEmailPreference.tsx e
+// dispatcher.ts) — os demais eventos ainda só têm WHATSAPP implementado.
+const CHANNELS = ["WHATSAPP", "EMAIL"] as const;
 
 const phoneSchema = z.object({
   phone: z

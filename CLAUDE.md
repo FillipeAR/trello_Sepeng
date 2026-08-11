@@ -553,6 +553,92 @@ e-mail estar confirmado. Descoberto e evitado durante o teste, não em produçã
 `VERCEL_PROJECT_PRODUCTION_URL`/`VERCEL_URL` (injetadas automaticamente pela Vercel) ou
 `localhost:3000` em dev, pra montar o link absoluto do e-mail de confirmação.
 
+### Feed de atualizações da obra, aviso de Obra Ganha e Jornal Sepeng dirigido — entregue
+
+Quatro pedidos relacionados de uma vez: (1) setores acompanharem a obra sem depender de quem
+foi notificado originalmente, (2) e-mail avisando a empresa quando uma obra é ganha, (3) o
+Jornal Sepeng ganhar post automático ao atingir marcos do fluxo, (4) esse post ser avisado
+por e-mail pra quem quiser. Levantamento prévio + validação de plano por agente dedicado
+antes de mexer em código (schema mexia em 4 pontos diferentes).
+
+**"Contato entre setores" virou um feed narrado pelo sistema, não chat.** O pedido original
+usava essa expressão mas, esclarecido com o usuário, o que fazia sentido era o próprio
+ObraFlow narrando automaticamente tudo que acontece na obra — não pessoas conversando (isso
+já existe, é `CommentsSection`/@menção). `ActivityFeed` (nova seção "Atualizações" na página
+da obra, `src/modules/projects/components/ActivityFeed.tsx`) lista todo `OutboxEvent` da
+obra, narrado por `describe()`. Achado de arquitetura: `resolveRecipients` (departamento
+dono da etapa + equipe alocada) sempre foi mais estreito que `canReadProject` — ou seja,
+quem lê a obra hoje já podia, em tese, ver mais do que era notificado; o feed só preenche
+essa lacuna com uma query nova (`listProjectActivity`, `src/modules/projects/activity.ts`),
+sem tocar em `resolveRecipients` (que continua controlando só push/WhatsApp/in-app).
+`OutboxEvent` ganhou coluna `projectId` (antes só existia dentro do `payload` Json, sem
+índice) pra essa query não precisar varrer Json.
+
+**`describe()` saiu do dispatcher e virou função pura em `src/core/notifications/describe.ts`**
+(com teste próprio, `describe.test.ts`) — reaproveitada pelo feed e pelo post automático do
+Jornal, além do worker de notificação in-app que já a usava. `DOMAIN_EVENTS` também migrou
+pra `src/core/notifications/events.ts` (antes vivia em `src/server/outbox.ts`, que faz
+`import type` de `db.ts`/Prisma) — `describe()` é `core` de verdade e não podia depender de
+`src/server/**`; `outbox.ts` agora reexporta de lá pra não quebrar nenhum import existente.
+
+**E-mail de "Obra Ganha"**: nova `PERMISSIONS.RECIPIENTS_MANAGE` (`recipients:manage`),
+cadastro simples em `/admin/avisos-externos` (`src/modules/recipients/`, clonado do
+esqueleto de `staff/`/`Professional` — sem relação com `User`) — lista curada por admin,
+não é opt-in. Dispara em `PROJECT_CREATED` (evento de ciclo de vida, não amarrado a etapa
+nenhuma — mesmo se o nome/`displayStatus` da etapa inicial mudar, continua funcionando),
+incondicional, mesmo padrão de `dispatchStaffAssignedEmail`.
+
+**Jornal automático em marcos**: `WorkflowStage` ganhou `postsToJournal` (campo de passagem
+versionado, mesmo padrão de `completionMode`) — quando uma etapa marcada é aberta
+(`executeStageAction` ou `createProject`, pra cobrir a etapa inicial), enfileira
+`stage.milestone_reached`; o dispatcher chama `createAutoNewsPost` (`src/modules/news/commands.ts`),
+que **não** é o mesmo command do post manual — quem avança uma etapa de RH/Segurança
+normalmente não tem `news:manage`, e a regra do projeto já obriga o efeito colateral a
+nascer fora do command handler que mudou o estado da obra, no worker do outbox.
+`NewsPost.sourceEventId` (único) segura a idempotência: se o worker reprocessar o mesmo
+evento (retry antes de marcar `DONE`), não duplica o post. `scripts/enable-journal-milestones.ts`
+liga o flag nas etapas `isInitial`/`isFinal` do fluxo publicado (marco natural de qualquer
+fluxo, sem hardcode de `key`) — outras etapas exigem script à parte por enquanto, mesmo
+status de `completionMode` no editor visual.
+
+**Jornal por e-mail, opt-in**: `createNewsPost` (manual) e `createAutoNewsPost` (automático)
+enfileiram `news.published`. Canal `EMAIL` entrou em `NotificationPreference` — mas **não**
+foi pra matriz genérica de `/notificacoes` (`CONFIGURABLE_CHANNELS`), que já tinha um "toggle
+enganoso" discreto pra 3 eventos de conta sem dispatcher de e-mail nenhum; colocar EMAIL lá
+teria espalhado esse problema pras ~13 linhas restantes. Em vez disso, `newsEmailEnabled` é
+um campo dedicado em `MyNotificationSettings`, com seção própria na UI
+(`NewsEmailPreference.tsx`, ao lado de `WhatsAppPreferences`). Dispatcher pro e-mail do
+Jornal (`dispatchNewsEmail`) não usa `resolveRecipients` (escopado a obra, e Jornal é
+org-wide) nem cria `Notification` in-app (`/jornal` já é a superfície "pull").
+
+**Dois achados de correção aproveitados na mesma rodada**, ambos fora do pedido original mas
+descobertos mexendo no código adjacente: `createDraftVersion` (clonagem de rascunho no
+editor de fluxos) esquecia de copiar `completionMode`/`externalCompletionPath`/
+`externalCompletionLabel` — todo "Criar rascunho do fluxo" resetava a Diretoria pro modo
+FORM em silêncio; e `dispatchWhatsApp` chamava `resolveChannelEnabled` com o lote de
+preferências de **todos** os destinatários de um evento sem filtrar por usuário, então a
+preferência de um usuário podia vazar pra outro que nunca configurou WhatsApp. Os dois
+corrigidos junto — o primeiro porque `postsToJournal` teria o mesmo destino se não
+corrigido, o segundo porque o dispatcher novo do Jornal (org-wide, lote grande) tornava o
+mesmo tipo de bug muito mais provável de disparar de verdade.
+
+**O bug de clonagem já tinha estragado produção antes desta correção existir.** Ao conferir
+o deploy, a etapa Diretoria em produção estava com `completionMode: "FORM"` — a v8
+(publicada antes desta rodada) tinha `EXTERNAL` certinho, mas a v9 (publicada por fora,
+antes desta sessão, provavelmente na mesma leva que removeu o Financeiro) já tinha perdido
+isso pro bug de clonagem, sem ninguém notar. Ou seja: o redirect pra Equipe da Obra parou de
+funcionar em produção havia pelo menos uma versão, silenciosamente (etapa sem campos e sem
+redirect = obra trava ali). `scripts/fix-diretoria-completion-mode.ts` republicou o valor
+certo (v11) — a correção no `createDraftVersion` impede que aconteça de novo, mas não desfaz
+sozinha dado já perdido em versões antigas; precisou de conferência manual pós-deploy pra
+achar isso.
+
+Verificado ponta a ponta contra o banco local antes do deploy (não só `npm test`/`tsc`/`build`):
+criação de obra disparando `project.created` + `stage.milestone_reached`, post automático
+criado com `sourceEventId`, reprocessamento do mesmo evento sem duplicar post, avanço pra
+etapa não-marcada não gerando post, e clonagem de rascunho preservando `postsToJournal` de
+uma versão publicada pra outra.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
@@ -565,13 +651,28 @@ só `EMAIL_FROM` com um domínio verificado na Resend pra sair de "só entrega e
 teste" pra "entrega em qualquer profissional real". Uma terceira rodada simplificou
 Orçamento, removeu Suprimentos, criou as primeiras contas nomeadas por setor (Erika e
 Thaina), tirou a data do lembrete e trocou a etapa Diretoria por um redirect pro canvas de
-equipe (ver seções acima) — essas três primeiras rodadas já em produção (schema, dado e
-deploy aplicados). Uma quarta rodada entregou rate limiting de login e cadastro próprio
-(ver seção acima) — só local por enquanto, produção segue sem essas duas até deploy
-explícito.
+equipe (ver seções acima). Uma quarta rodada entregou rate limiting de login e cadastro
+próprio. **Todas as rodadas até aqui, incluindo a remoção do Financeiro e o reordenamento
+RH/Segurança, já estão em produção** — ao conferir antes de deployar a quinta rodada,
+descobriu-se que a documentação anterior deste arquivo estava desatualizada quanto a isso
+(dizia "só local" pra rate limiting/cadastro e listava a remoção do Financeiro como
+pendente; na prática só faltava mesmo a migration desta quinta rodada, `prisma migrate
+status` contra o Neon confirmou isso). `RESEND_API_KEY` já está provisionado (Produção e
+Preview) e testado com envio real — falta só `EMAIL_FROM` com um domínio verificado na
+Resend pra sair de "só entrega em endereço de teste" pra "entrega em qualquer profissional
+real".
+
+Uma quinta rodada entregou o feed de atualizações, o aviso de Obra Ganha e o Jornal dirigido
+(ver seção acima) — **já aplicada em produção**: migration (`prisma migrate deploy`),
+`scripts/sync-permissions.ts` (`recipients:manage` nos papéis) e
+`scripts/enable-journal-milestones.ts` (Orçamento/Obra Finalizada marcados) rodados contra o
+Neon, fluxo publicado como v11. No mesmo processo, achou-se e corrigiu-se em produção a
+regressão da Diretoria descrita acima (`scripts/fix-diretoria-completion-mode.ts`).
 
 Próximos candidatos sem ordem definida: reset de senha ("esqueci minha senha" — a única
 lacuna do levantamento de segurança que ainda falta), controles no editor visual pra
-`completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais
-ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe da obra, e
-o que a Sepeng priorizar no uso real.
+`completionMode`/`externalCompletionPath`/`postsToJournal` (hoje só por script), paginação/
+filtros mais ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe
+da obra, e o que a Sepeng priorizar no uso real. Vale conferir periodicamente se a
+documentação deste arquivo segue batendo com o estado real de produção (`prisma migrate
+status` contra o Neon é a fonte da verdade, não o texto aqui) — já divergiu uma vez.

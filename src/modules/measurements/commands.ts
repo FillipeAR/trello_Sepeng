@@ -223,6 +223,7 @@ async function decideMeasurement(
       await enqueueEvent(tx, {
         organizationId: actor.organizationId,
         type: input.approve ? DOMAIN_EVENTS.MEASUREMENT_APPROVED : DOMAIN_EVENTS.MEASUREMENT_REJECTED,
+        projectId: project.id,
         payload: {
           projectId: project.id,
           projectName: project.name,

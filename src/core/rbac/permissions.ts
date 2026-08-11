@@ -29,6 +29,8 @@ export const PERMISSIONS = {
   ROLE_MANAGE: "role:manage",
   DEPARTMENT_MANAGE: "department:manage",
   STAFF_MANAGE: "staff:manage",
+  /** Lista curada de contatos externos que recebem e-mail quando uma obra é criada. */
+  RECIPIENTS_MANAGE: "recipients:manage",
 
   // Transversal
   AUDIT_READ: "audit:read",
@@ -71,6 +73,7 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.ROLE_MANAGE, category: "Administração", description: "Gerenciar papéis e permissões" },
   { key: PERMISSIONS.DEPARTMENT_MANAGE, category: "Administração", description: "Gerenciar departamentos" },
   { key: PERMISSIONS.STAFF_MANAGE, category: "Administração", description: "Gerenciar o cadastro de engenheiros e encarregados" },
+  { key: PERMISSIONS.RECIPIENTS_MANAGE, category: "Administração", description: "Gerenciar a lista de e-mails avisados quando uma obra é ganha" },
   { key: PERMISSIONS.AUDIT_READ, category: "Transversal", description: "Consultar a trilha de auditoria" },
   { key: PERMISSIONS.REPORT_READ, category: "Transversal", description: "Acessar relatórios e indicadores" },
   { key: PERMISSIONS.COMMENT_CREATE, category: "Transversal", description: "Comentar em obras e etapas" },
@@ -122,6 +125,7 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.PROCUREMENT_MANAGE,
       PERMISSIONS.PROJECT_READ_CONTRACT_VALUE,
       PERMISSIONS.NEWS_MANAGE,
+      PERMISSIONS.RECIPIENTS_MANAGE,
     ],
   },
   {

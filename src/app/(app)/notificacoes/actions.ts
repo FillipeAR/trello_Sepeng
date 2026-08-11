@@ -38,7 +38,7 @@ export async function updatePhoneAction(_prev: ActionState, formData: FormData):
 export async function togglePreferenceAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await requireActor();
   const eventType = String(formData.get("eventType") ?? "");
-  const channel = String(formData.get("channel") ?? "") as "WHATSAPP";
+  const channel = String(formData.get("channel") ?? "") as "WHATSAPP" | "EMAIL";
   const enabled = formData.get("enabled") === "true";
 
   try {

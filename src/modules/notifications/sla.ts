@@ -46,6 +46,7 @@ export async function checkSlaBreaches(): Promise<number> {
       await enqueueEvent(tx, {
         organizationId: instance.project.organizationId,
         type: DOMAIN_EVENTS.SLA_BREACHED,
+        projectId: instance.project.id,
         payload: {
           projectId: instance.project.id,
           projectName: instance.project.name,

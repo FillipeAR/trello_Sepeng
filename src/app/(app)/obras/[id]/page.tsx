@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 import { hasPermission } from "@/core/rbac/can";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { getProjectDetail } from "@/modules/projects/queries";
+import { listProjectActivity } from "@/modules/projects/activity";
 import { listProjectTasks } from "@/modules/tasks/queries";
 import { listProfessionals } from "@/modules/staff/queries";
 import { listProjectComments } from "@/modules/comments/queries";
@@ -12,6 +13,7 @@ import { getProjectMeasurements } from "@/modules/measurements/queries";
 import { getProjectDocuments } from "@/modules/documents/queries";
 import { getProjectPurchaseOrders, listSuppliers } from "@/modules/procurement/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
+import { ActivityFeed } from "@/modules/projects/components/ActivityFeed";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { ExternalCompletionPanel } from "@/modules/projects/components/ExternalCompletionPanel";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
@@ -32,7 +34,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
   const { project, activeStages, timeline, progress, updates } = detail;
   const canUpdateProgress = hasPermission(actor, PERMISSIONS.PROJECT_UPDATE_PROGRESS);
 
-  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers] =
+  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers, activity] =
     await Promise.all([
       prisma.membership.findMany({
         where: { organizationId: actor.organizationId, isActive: true },
@@ -46,6 +48,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
       getProjectDocuments(actor, project.id),
       getProjectPurchaseOrders(actor, project.id),
       listSuppliers(actor),
+      listProjectActivity(actor, project.id),
     ]);
 
   return (
@@ -107,6 +110,8 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
       <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
         <div className="space-y-6">
           <StageTimeline projectId={project.id} steps={timeline} progress={progress} />
+
+          <ActivityFeed items={activity ?? []} />
 
           <section className="card p-6">
             <h2 className="mb-3 text-sm font-semibold">Escopo resumido</h2>

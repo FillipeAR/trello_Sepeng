@@ -42,6 +42,7 @@ export async function loadSnapshot(
     completionMode: s.completionMode,
     externalCompletionPath: s.externalCompletionPath,
     externalCompletionLabel: s.externalCompletionLabel,
+    postsToJournal: s.postsToJournal,
     fields: s.fields.map((f) => ({
       id: f.id,
       key: f.key,

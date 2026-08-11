@@ -46,6 +46,7 @@ export async function checkDocumentExpirations(): Promise<{ expiringSoon: number
       await enqueueEvent(tx, {
         organizationId: document.project.organizationId,
         type: DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON,
+        projectId: document.project.id,
         payload: {
           projectId: document.project.id,
           projectName: document.project.name,
@@ -87,6 +88,7 @@ export async function checkDocumentExpirations(): Promise<{ expiringSoon: number
       await enqueueEvent(tx, {
         organizationId: document.project.organizationId,
         type: DOMAIN_EVENTS.DOCUMENT_EXPIRED,
+        projectId: document.project.id,
         payload: {
           projectId: document.project.id,
           projectName: document.project.name,

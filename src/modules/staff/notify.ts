@@ -32,6 +32,7 @@ export async function enqueueStaffAssignedEvent(
   await enqueueEvent(tx, {
     organizationId: args.organizationId,
     type: DOMAIN_EVENTS.STAFF_ASSIGNED,
+    projectId: args.projectId,
     payload: {
       professionalId: args.professionalId,
       projectId: args.projectId,
