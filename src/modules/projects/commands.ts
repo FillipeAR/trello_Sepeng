@@ -133,26 +133,6 @@ export async function createProject(actor: SessionContext, input: CreateProjectI
       idempotencyKey: `project.created:${created.id}`,
     });
 
-    if (initialStage.postsToJournal) {
-      await enqueueEvent(tx, {
-        organizationId: actor.organizationId,
-        type: DOMAIN_EVENTS.STAGE_MILESTONE_REACHED,
-        projectId: created.id,
-        payload: {
-          projectId: created.id,
-          projectName: created.name,
-          projectCode: code,
-          stageId: initialStage.id,
-          stageName: initialStage.name,
-          departmentId: initialStage.departmentId,
-          displayStatus: initialStage.displayStatus,
-          actorName: actor.userName,
-          actorId: actor.userId,
-        },
-        idempotencyKey: `${DOMAIN_EVENTS.STAGE_MILESTONE_REACHED}:${created.id}:${initialStage.id}`,
-      });
-    }
-
     return created;
   });
 
@@ -481,27 +461,6 @@ export async function executeStageAction(
           },
           idempotencyKey: `${DOMAIN_EVENTS.STAGE_ENTERED}:${currentInstance.id}:${action.key}:${target.id}`,
         });
-
-        if (target.postsToJournal) {
-          await enqueueEvent(tx, {
-            organizationId: actor.organizationId,
-            type: DOMAIN_EVENTS.STAGE_MILESTONE_REACHED,
-            projectId: project.id,
-            payload: {
-              projectId: project.id,
-              projectName: project.name,
-              projectCode: project.code,
-              fromStageName: currentStage.name,
-              stageId: target.id,
-              stageName: target.name,
-              departmentId: target.departmentId,
-              displayStatus: target.displayStatus,
-              actorName: actor.userName,
-              actorId: actor.userId,
-            },
-            idempotencyKey: `${DOMAIN_EVENTS.STAGE_MILESTONE_REACHED}:${currentInstance.id}:${action.key}:${target.id}`,
-          });
-        }
       }
 
       if (finished) {

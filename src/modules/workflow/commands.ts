@@ -135,7 +135,6 @@ export async function createDraftVersion(actor: SessionContext, input: { definit
             completionMode: stage.completionMode,
             externalCompletionPath: stage.externalCompletionPath,
             externalCompletionLabel: stage.externalCompletionLabel,
-            postsToJournal: stage.postsToJournal,
           },
         });
         stageIdMap.set(stage.id, created.id);
@@ -324,7 +323,6 @@ const stageSchema = z.object({
   completionMode: z.enum(["FORM", "EXTERNAL"]).default("FORM"),
   externalCompletionPath: z.string().nullable().optional(),
   externalCompletionLabel: z.string().nullable().optional(),
-  postsToJournal: z.boolean().default(false),
 });
 
 export type StageInput = z.infer<typeof stageSchema>;
@@ -377,7 +375,6 @@ export async function createStage(actor: SessionContext, input: { versionId: str
         completionMode: data.completionMode,
         externalCompletionPath: data.externalCompletionPath || null,
         externalCompletionLabel: data.externalCompletionLabel || null,
-        postsToJournal: data.postsToJournal,
       },
     });
 
@@ -425,7 +422,6 @@ export async function updateStage(actor: SessionContext, input: { stageId: strin
         completionMode: data.completionMode,
         externalCompletionPath: data.externalCompletionPath || null,
         externalCompletionLabel: data.externalCompletionLabel || null,
-        postsToJournal: data.postsToJournal,
       },
     });
 

@@ -10,7 +10,6 @@ const TITLES: [string, string][] = [
   ["/lembretes", "Lembretes"],
   ["/admin/fluxos", "Fluxos"],
   ["/admin/profissionais", "Engenheiros"],
-  ["/admin/avisos-externos", "Avisos de obra ganha"],
   ["/notificacoes", "Notificações"],
 ];
 

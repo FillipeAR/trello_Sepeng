@@ -5,7 +5,7 @@ import { prisma } from "@/server/db";
 import { formatDateTime } from "@/lib/format";
 import { getMyNotificationSettings } from "@/modules/notifications/queries";
 import { WhatsAppPreferences } from "@/modules/notifications/components/WhatsAppPreferences";
-import { NewsEmailPreference } from "@/modules/notifications/components/NewsEmailPreference";
+import { EmailPreferences } from "@/modules/notifications/components/EmailPreferences";
 
 export default async function NotificacoesPage() {
   const actor = await requireActor();
@@ -48,7 +48,7 @@ export default async function NotificacoesPage() {
       </div>
 
       <WhatsAppPreferences settings={settings} />
-      <NewsEmailPreference enabled={settings.newsEmailEnabled} />
+      <EmailPreferences rows={settings.emailRows} />
 
       {notifications.length === 0 ? (
         <div className="card p-10 text-center text-sm text-muted">

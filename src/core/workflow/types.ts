@@ -73,8 +73,6 @@ export interface StageDef {
   externalCompletionPath: string | null;
   /** Texto do botão de redirect. */
   externalCompletionLabel: string | null;
-  /** Entrar nesta etapa publica automaticamente um post no Jornal Sepeng. */
-  postsToJournal: boolean;
   fields: StageFieldDef[];
   actions: StageActionDef[];
 }

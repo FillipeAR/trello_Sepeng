@@ -80,7 +80,6 @@ async function main() {
         completionMode: "EXTERNAL",
         externalCompletionPath: "equipe",
         externalCompletionLabel: "Ir para Equipe da Obra",
-        postsToJournal: diretoria.postsToJournal,
       },
     });
     console.log('Diretoria: completionMode = EXTERNAL, externalCompletionPath = "equipe".');

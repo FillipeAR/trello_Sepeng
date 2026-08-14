@@ -145,9 +145,7 @@ model Organization {
   notifications Notification[]
   outboxEvents  OutboxEvent[]
   professionals Professional[]
-  newsPosts     NewsPost[]
   teamPositions TeamPosition[]
-  externalNotificationRecipients ExternalNotificationRecipient[]
 
   @@map("organizations")
 }
@@ -213,52 +211,6 @@ model TeamPosition {
   @@map("team_positions")
 }
 
-/// Jornal Sepeng — notícias da empresa, aba inicial visível a todos os papéis.
-/// Publicar exige `news:manage` (Administrador/Diretoria por padrão); ler não
-/// exige permissão nenhuma além de estar autenticado na organização.
-model NewsPost {
-  id             String    @id @default(cuid())
-  organizationId String
-  authorId       String
-  title          String
-  body           String
-  imageUrl       String?
-  /// Preenchido só em posts gerados automaticamente por um marco do fluxo
-  /// (ver WorkflowStage.postsToJournal) — id do OutboxEvent de origem
-  /// (stage.milestone_reached), usado como trava de idempotência: se o
-  /// worker reprocessar o mesmo evento, não duplica o post. Nulo em post
-  /// manual (criado por um admin em /jornal).
-  sourceEventId  String?   @unique
-  publishedAt    DateTime  @default(now())
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  author       User         @relation(fields: [authorId], references: [id])
-
-  @@index([organizationId, deletedAt, publishedAt])
-  @@map("news_posts")
-}
-
-/// Lista curada por admin de contatos (dentro ou fora do sistema, sem
-/// relação com User/Professional) que recebem e-mail sempre que uma obra
-/// nova é criada ("Obra Ganha") — distribuição fixa, não é opt-in.
-model ExternalNotificationRecipient {
-  id             String    @id @default(cuid())
-  organizationId String
-  name           String
-  email          String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  deletedAt      DateTime?
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId, deletedAt])
-  @@map("external_notification_recipients")
-}
-
 model User {
   id              String    @id @default(cuid())
   name            String
@@ -293,7 +245,6 @@ model User {
   approvedMeasurements    Measurement[]            @relation("MeasurementApprovedBy")
   createdDocuments        ProjectDocument[]
   createdPurchaseOrders   PurchaseOrder[]
-  newsPosts               NewsPost[]
   emailVerificationTokens EmailVerificationToken[]
 
   @@map("users")
@@ -480,10 +431,6 @@ model WorkflowStage {
   externalCompletionPath  String?
   /// Texto do botão de redirect na página da obra. Ex.: "Ir para Equipe da Obra".
   externalCompletionLabel String?
-  /// Quando true, entrar nesta etapa publica automaticamente um post no
-  /// Jornal Sepeng (marco do fluxo) — ver stage.milestone_reached e
-  /// createAutoNewsPost. Default false: nem toda etapa é notícia.
-  postsToJournal          Boolean             @default(false)
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
 

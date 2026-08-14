@@ -22,6 +22,16 @@ const EVENT_LABELS: Record<string, string> = {
   [DOMAIN_EVENTS.DOCUMENT_EXPIRED]: "Documento vencido",
 };
 
+/**
+ * Eventos com opt-in por e-mail de verdade (dispatcher dedicado, ver
+ * `dispatchOptInEmail` em `dispatcher.ts`) — fica fora da matriz genérica
+ * `rows`/`CONFIGURABLE_CHANNELS` de propósito: colocar EMAIL lá criaria um
+ * toggle pra todo evento, mas só este tem envio de verdade.
+ */
+const EMAIL_EVENTS: { eventType: string; label: string }[] = [
+  { eventType: DOMAIN_EVENTS.PROJECT_CREATED, label: "Obra Ganha (nova obra cadastrada)" },
+];
+
 export interface MyNotificationSettings {
   phone: string | null;
   rows: {
@@ -29,13 +39,7 @@ export interface MyNotificationSettings {
     label: string;
     channels: Record<NotificationChannel, boolean>;
   }[];
-  /**
-   * Único evento com opt-in por e-mail hoje (Jornal Sepeng) — fica fora da
-   * matriz genérica `rows` de propósito: colocar EMAIL em `CONFIGURABLE_CHANNELS`
-   * criaria um toggle pra todo evento, mas só news.published tem dispatcher de
-   * e-mail de verdade (ver dispatcher.ts).
-   */
-  newsEmailEnabled: boolean;
+  emailRows: { eventType: string; label: string; enabled: boolean }[];
 }
 
 export async function getMyNotificationSettings(actor: SessionContext): Promise<MyNotificationSettings> {
@@ -57,7 +61,11 @@ export async function getMyNotificationSettings(actor: SessionContext): Promise<
     ) as Record<NotificationChannel, boolean>,
   }));
 
-  const newsEmailEnabled = resolveChannelEnabled(prefs, DOMAIN_EVENTS.NEWS_PUBLISHED, "EMAIL", { hasPhone: true });
+  const emailRows = EMAIL_EVENTS.map(({ eventType, label }) => ({
+    eventType,
+    label,
+    enabled: resolveChannelEnabled(prefs, eventType, "EMAIL", { hasPhone: true }),
+  }));
 
-  return { phone: user.phone, rows, newsEmailEnabled };
+  return { phone: user.phone, rows, emailRows };
 }

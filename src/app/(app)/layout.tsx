@@ -8,8 +8,6 @@ import {
   ClipboardList,
   HardHat,
   LayoutGrid,
-  Mail,
-  Newspaper,
   Plus,
   Search,
   Truck,
@@ -35,7 +33,6 @@ export default async function AppLayout({
     {
       title: "Principal",
       items: [
-        { href: "/jornal", label: "Jornal Sepeng", icon: <Newspaper strokeWidth={1.75} />, show: true },
         { href: "/dashboard", label: "Painel", icon: <LayoutGrid strokeWidth={1.75} />, show: true },
         { href: "/obras", label: "Obras", icon: <Building2 strokeWidth={1.75} />, show: true },
         {
@@ -73,12 +70,6 @@ export default async function AppLayout({
           label: "Usuários",
           icon: <Users strokeWidth={1.75} />,
           show: actor.permissions.includes(PERMISSIONS.USER_MANAGE),
-        },
-        {
-          href: "/admin/avisos-externos",
-          label: "Avisos de obra ganha",
-          icon: <Mail strokeWidth={1.75} />,
-          show: actor.permissions.includes(PERMISSIONS.RECIPIENTS_MANAGE),
         },
       ],
     },

@@ -82,7 +82,6 @@ function stageDataFromForm(formData: FormData) {
     completionMode: (str(formData, "completionMode") || "FORM") as "FORM" | "EXTERNAL",
     externalCompletionPath: nullableStr(formData, "externalCompletionPath"),
     externalCompletionLabel: nullableStr(formData, "externalCompletionLabel"),
-    postsToJournal: bool(formData, "postsToJournal"),
   };
 }
 

@@ -49,7 +49,6 @@ export function makeStage(over: Partial<StageDef> = {}): StageDef {
     completionMode: "FORM",
     externalCompletionPath: null,
     externalCompletionLabel: null,
-    postsToJournal: false,
     fields: [],
     actions: [makeAction()],
     ...over,

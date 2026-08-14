@@ -29,15 +29,12 @@ export const PERMISSIONS = {
   ROLE_MANAGE: "role:manage",
   DEPARTMENT_MANAGE: "department:manage",
   STAFF_MANAGE: "staff:manage",
-  /** Lista curada de contatos externos que recebem e-mail quando uma obra é criada. */
-  RECIPIENTS_MANAGE: "recipients:manage",
 
   // Transversal
   AUDIT_READ: "audit:read",
   REPORT_READ: "report:read",
   COMMENT_CREATE: "comment:create",
   TASK_MANAGE: "task:manage",
-  NEWS_MANAGE: "news:manage",
 
   // Financeiro
   MEASUREMENT_MANAGE: "measurement:manage",
@@ -73,12 +70,10 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.ROLE_MANAGE, category: "Administração", description: "Gerenciar papéis e permissões" },
   { key: PERMISSIONS.DEPARTMENT_MANAGE, category: "Administração", description: "Gerenciar departamentos" },
   { key: PERMISSIONS.STAFF_MANAGE, category: "Administração", description: "Gerenciar o cadastro de engenheiros e encarregados" },
-  { key: PERMISSIONS.RECIPIENTS_MANAGE, category: "Administração", description: "Gerenciar a lista de e-mails avisados quando uma obra é ganha" },
   { key: PERMISSIONS.AUDIT_READ, category: "Transversal", description: "Consultar a trilha de auditoria" },
   { key: PERMISSIONS.REPORT_READ, category: "Transversal", description: "Acessar relatórios e indicadores" },
   { key: PERMISSIONS.COMMENT_CREATE, category: "Transversal", description: "Comentar em obras e etapas" },
   { key: PERMISSIONS.TASK_MANAGE, category: "Transversal", description: "Criar e concluir pendências" },
-  { key: PERMISSIONS.NEWS_MANAGE, category: "Transversal", description: "Publicar notícias no Jornal Sepeng" },
   { key: PERMISSIONS.MEASUREMENT_MANAGE, category: "Financeiro", description: "Registrar e aprovar medições (orçamento vs. custo real)" },
   { key: PERMISSIONS.PROJECT_READ_CONTRACT_VALUE, category: "Financeiro", description: "Ver o valor de contrato da obra" },
   { key: PERMISSIONS.DOCUMENT_MANAGE, category: "Compliance", description: "Gerenciar documentos com validade (ART/RRT, alvará, licença, seguro)" },
@@ -124,8 +119,6 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.DOCUMENT_MANAGE,
       PERMISSIONS.PROCUREMENT_MANAGE,
       PERMISSIONS.PROJECT_READ_CONTRACT_VALUE,
-      PERMISSIONS.NEWS_MANAGE,
-      PERMISSIONS.RECIPIENTS_MANAGE,
     ],
   },
   {

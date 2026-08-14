@@ -67,7 +67,6 @@ export interface StageData {
   completionMode: string;
   externalCompletionPath: string | null;
   externalCompletionLabel: string | null;
-  postsToJournal: boolean;
   fields: StageFieldData[];
   actions: StageActionData[];
   transitions: StageTransitionData[];
@@ -180,7 +179,6 @@ export function StageCard({
         <input type="hidden" name="completionMode" value={stage.completionMode} />
         <input type="hidden" name="externalCompletionPath" value={stage.externalCompletionPath ?? ""} />
         <input type="hidden" name="externalCompletionLabel" value={stage.externalCompletionLabel ?? ""} />
-        <input type="hidden" name="postsToJournal" value={stage.postsToJournal ? "on" : ""} />
         <ErrorBanner errors={state.errors} />
         <StageFieldSet departments={departments} fieldErrors={state.fieldErrors} defaults={stage} />
         <button type="submit" disabled={pending} className="btn-ghost">

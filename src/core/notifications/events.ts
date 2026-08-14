@@ -24,10 +24,6 @@ export const DOMAIN_EVENTS = {
   EMAIL_VERIFICATION_REQUESTED: "email_verification.requested",
   /** E-mail confirmado num cadastro próprio — falta aprovação de um admin. */
   SIGNUP_PENDING_APPROVAL: "signup.pending_approval",
-  /** Obra entrou numa etapa marcada como marco (WorkflowStage.postsToJournal). */
-  STAGE_MILESTONE_REACHED: "stage.milestone_reached",
-  /** Post novo no Jornal Sepeng, manual ou automático. */
-  NEWS_PUBLISHED: "news.published",
 } as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];

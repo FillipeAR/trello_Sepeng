@@ -13,8 +13,8 @@ import { CommandError } from "@/modules/projects/commands";
  */
 
 const EVENT_TYPES = Object.values(DOMAIN_EVENTS);
-// EMAIL só é oferecido pro evento news.published (ver NewsEmailPreference.tsx e
-// dispatcher.ts) — os demais eventos ainda só têm WHATSAPP implementado.
+// EMAIL só é oferecido pros eventos em EMAIL_EVENTS (ver queries.ts e
+// EmailPreferences.tsx) — os demais eventos ainda só têm WHATSAPP implementado.
 const CHANNELS = ["WHATSAPP", "EMAIL"] as const;
 
 const phoneSchema = z.object({

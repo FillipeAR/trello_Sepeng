@@ -2,8 +2,7 @@
  * Narra um evento de domínio em texto legível (título + corpo), em português.
  * Pura — sem I/O — reaproveitada tanto pelo worker do outbox (notificação
  * in-app/WhatsApp) quanto pelo feed de atualizações por obra
- * (`src/modules/projects/activity.ts`) e pelo post automático do Jornal
- * Sepeng (`createAutoNewsPost`).
+ * (`src/modules/projects/activity.ts`).
  */
 import { formatDate, formatDateTime } from "@/lib/format";
 import { DOMAIN_EVENTS } from "@/core/notifications/events";
@@ -18,7 +17,6 @@ export interface EventPayload {
   departmentId?: string | null;
   displayStatus?: string;
   actorName?: string;
-  /** Presente em stage.milestone_reached — autor do post automático do Jornal. */
   actorId?: string;
   taskId?: string;
   taskTitle?: string;
@@ -42,9 +40,6 @@ export interface EventPayload {
   name?: string;
   email?: string;
   token?: string;
-  /** news.published */
-  newsPostId?: string;
-  newsTitle?: string;
 }
 
 export function describe(type: string, p: EventPayload): { title: string; body: string } {
@@ -58,13 +53,6 @@ export function describe(type: string, p: EventPayload): { title: string; body: 
       return {
         title: `${p.projectName} chegou em ${p.stageName}`,
         body: `${p.actorName ?? "Um usuário"} concluiu ${p.fromStageName}. Status: "${p.displayStatus}".`,
-      };
-    case DOMAIN_EVENTS.STAGE_MILESTONE_REACHED:
-      return {
-        title: `${p.projectName} chegou em ${p.stageName}`,
-        body: p.fromStageName
-          ? `${p.actorName ?? "Um usuário"} concluiu ${p.fromStageName}. Status: "${p.displayStatus}".`
-          : `Status: "${p.displayStatus}".`,
       };
     case DOMAIN_EVENTS.STAGE_RETURNED:
       return {

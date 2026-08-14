@@ -4,7 +4,6 @@ import { DOMAIN_EVENTS, type DomainEventType } from "@/server/outbox";
 import { PERMISSIONS } from "@/core/rbac/permissions";
 import { resolveChannelEnabled } from "@/core/notifications/preferences";
 import { describe, type EventPayload } from "@/core/notifications/describe";
-import { createAutoNewsPost } from "@/modules/news/commands";
 import { sendWhatsAppMessage } from "./whatsapp";
 import { sendEmail } from "./email";
 
@@ -132,86 +131,21 @@ async function dispatchStaffAssignedEmail(payload: EventPayload): Promise<void> 
 }
 
 /**
- * `project.created` — além do fluxo genérico (notificação in-app pro
- * departamento dono da etapa inicial + equipe alocada), toda obra nova
- * também avisa por e-mail uma lista fixa curada por admin
- * (`ExternalNotificationRecipient`, `/admin/avisos-externos`) — gente que
- * precisa saber que uma obra foi ganha mesmo sem ter login ou departamento
- * no sistema. Incondicional, mesmo padrão de `dispatchStaffAssignedEmail`
- * (não é opt-in por usuário).
+ * Base pra todo e-mail opt-in org-wide (ex.: Obra Ganha): destinatário é
+ * qualquer usuário com login (não uma lista externa curada), filtrado pela
+ * própria preferência em `/notificacoes` — sem linha explícita, fica
+ * desligado (`resolveChannelEnabled`). Não usa `resolveRecipients` (escopado
+ * a departamento/equipe de uma obra; este evento é org-wide).
+ * `prefs` vem em lote pra todos os membros, mas é filtrado por usuário antes
+ * de resolver — mesmo cuidado de `dispatchWhatsApp`, senão a preferência de
+ * um vaza pra outro que nunca configurou nada.
  */
-async function dispatchExternalProjectCreatedEmail(
+async function dispatchOptInEmail(
   organizationId: string,
-  payload: EventPayload,
+  eventType: DomainEventType,
+  subject: string,
+  html: string,
 ): Promise<void> {
-  const recipients = await prisma.externalNotificationRecipient.findMany({
-    where: { organizationId, deletedAt: null },
-    select: { email: true, name: true },
-  });
-  if (recipients.length === 0) return;
-
-  const subject = `Obra ganha: ${payload.projectName}`;
-  const html = `
-    <p>Olá,</p>
-    <p>A obra <strong>${payload.projectName}</strong> (${payload.projectCode}) acaba de ser
-    cadastrada no ObraFlow — status "${payload.displayStatus ?? "Obra Ganha"}".</p>
-    <p>Este é um aviso informativo — você não precisa acessar o sistema.</p>
-  `;
-
-  for (const recipient of recipients) {
-    try {
-      await sendEmail(recipient.email, subject, html);
-    } catch (error) {
-      console.error(`Falha ao enviar e-mail de obra ganha (contato ${recipient.email}):`, error);
-    }
-  }
-}
-
-/**
- * `stage.milestone_reached` — além do fluxo genérico (mesma notificação in-app
- * que `stage.entered` já geraria), publica automaticamente no Jornal Sepeng
- * quando a etapa alvo está marcada como marco (`WorkflowStage.postsToJournal`).
- * `createAutoNewsPost` é idempotente por `sourceEventId` — reprocessar este
- * evento não duplica o post.
- */
-async function dispatchStageMilestoneNews(
-  organizationId: string,
-  eventId: string,
-  payload: EventPayload,
-): Promise<void> {
-  if (!payload.actorId) return;
-
-  const { title, body } = describe(DOMAIN_EVENTS.STAGE_MILESTONE_REACHED, payload);
-
-  try {
-    await createAutoNewsPost({
-      organizationId,
-      authorId: payload.actorId,
-      sourceEventId: eventId,
-      title,
-      body,
-    });
-  } catch (error) {
-    console.error(`Falha ao publicar post automático no Jornal (evento ${eventId}):`, error);
-  }
-}
-
-/**
- * `news.published` — não segue `resolveRecipients` (que é escopado a
- * departamento/equipe de uma obra específica; o Jornal é org-wide) nem gera
- * `Notification` in-app (a página /jornal já é a superfície de leitura
- * "pull"). Só e-mail, só pra quem ligou a preferência em `/notificacoes`
- * (opt-in — sem linha explícita, `resolveChannelEnabled` mantém desligado).
- */
-async function dispatchNewsEmail(organizationId: string, payload: EventPayload): Promise<void> {
-  if (!payload.newsPostId) return;
-
-  const post = await prisma.newsPost.findUnique({
-    where: { id: payload.newsPostId },
-    select: { title: true, body: true },
-  });
-  if (!post) return;
-
   const members = await prisma.membership.findMany({
     where: { organizationId, isActive: true },
     select: { userId: true },
@@ -222,26 +156,35 @@ async function dispatchNewsEmail(organizationId: string, payload: EventPayload):
   const [users, prefs] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, email: true } }),
     prisma.notificationPreference.findMany({
-      where: { userId: { in: userIds }, eventType: DOMAIN_EVENTS.NEWS_PUBLISHED, channel: "EMAIL" },
+      where: { userId: { in: userIds }, eventType, channel: "EMAIL" },
     }),
   ]);
 
-  const subject = `Jornal Sepeng: ${post.title}`;
-  const html = `
-    <h2>${post.title}</h2>
-    <div>${post.body}</div>
-  `;
-
   for (const user of users) {
     const userPrefs = prefs.filter((p) => p.userId === user.id);
-    const enabled = resolveChannelEnabled(userPrefs, DOMAIN_EVENTS.NEWS_PUBLISHED, "EMAIL", { hasPhone: true });
+    const enabled = resolveChannelEnabled(userPrefs, eventType, "EMAIL", { hasPhone: true });
     if (!enabled) continue;
     try {
       await sendEmail(user.email, subject, html);
     } catch (error) {
-      console.error(`Falha ao enviar e-mail do Jornal (usuário ${user.id}):`, error);
+      console.error(`Falha ao enviar e-mail (evento ${eventType}, usuário ${user.id}):`, error);
     }
   }
+}
+
+/**
+ * `project.created` por e-mail — opt-in por usuário em `/notificacoes`
+ * (ver `EMAIL_EVENTS` em `queries.ts`), não uma lista externa curada por
+ * admin. Além do fluxo genérico (notificação in-app pro departamento dono
+ * da etapa inicial + equipe alocada), que continua intocado.
+ */
+async function dispatchProjectCreatedEmail(organizationId: string, payload: EventPayload): Promise<void> {
+  const subject = `Obra ganha: ${payload.projectName}`;
+  const html = `
+    <p>A obra <strong>${payload.projectName}</strong> (${payload.projectCode}) acaba de ser
+    cadastrada no ObraFlow — status "${payload.displayStatus ?? "Obra Ganha"}".</p>
+  `;
+  await dispatchOptInEmail(organizationId, DOMAIN_EVENTS.PROJECT_CREATED, subject, html);
 }
 
 /**
@@ -318,8 +261,6 @@ export async function processOutbox(limit = 50): Promise<number> {
         await dispatchEmailVerificationEmail(payload);
       } else if (event.type === DOMAIN_EVENTS.SIGNUP_PENDING_APPROVAL) {
         await dispatchSignupPendingApproval(event.organizationId, payload);
-      } else if (event.type === DOMAIN_EVENTS.NEWS_PUBLISHED) {
-        await dispatchNewsEmail(event.organizationId, payload);
       } else {
         const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
         const { title, body } = describe(event.type, payload);
@@ -340,11 +281,7 @@ export async function processOutbox(limit = 50): Promise<number> {
         }
 
         if (event.type === DOMAIN_EVENTS.PROJECT_CREATED) {
-          await dispatchExternalProjectCreatedEmail(event.organizationId, payload);
-        }
-
-        if (event.type === DOMAIN_EVENTS.STAGE_MILESTONE_REACHED) {
-          await dispatchStageMilestoneNews(event.organizationId, event.id, payload);
+          await dispatchProjectCreatedEmail(event.organizationId, payload);
         }
       }
 
