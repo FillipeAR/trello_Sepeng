@@ -120,8 +120,9 @@ etapa própria pra atuar. Orçamento também tem duas contas nomeadas reais (Eri
 MVP completo e verificado ponta a ponta: auth, RBAC, engine versionado, fluxo de 8 etapas,
 cadastro de obra, formulários dinâmicos, esteira visual, fila do departamento, auditoria,
 notificações in-app (e-mail via Resend pra seleção de profissional), dashboards, visualização
-do fluxo, gestão de usuários, Jornal Sepeng e Estrutura da Equipe da Obra (canvas com
-drag-and-drop). Build, lint, `tsc` e 93 testes passando.
+do fluxo, gestão de usuários e Estrutura da Equipe da Obra (canvas com drag-and-drop). Build,
+lint, `tsc` e 97 testes passando. Jornal Sepeng foi entregue e depois removido do repositório
+— ver seção correspondente mais abaixo.
 
 Existe um fluxo v2 no banco (com etapa Jurídico) criado pelo script de demonstração, e duas
 obras de exemplo.
@@ -351,17 +352,27 @@ gerente/encarregado de uma obra agora. O evento `staff.assigned`/e-mail de sele�
 anterior) continua existindo, só perdeu o segundo ponto de disparo (a atribuição do
 organograma) — hoje dispara só a partir do campo STAFF da etapa.
 
-### Jornal Sepeng — entregue
+### Jornal Sepeng — entregue e depois removido
 
 Aba "Jornal Sepeng" — primeira entrada da navegação, visível a todo mundo, sem gate de
-permissão pra leitura. Nova `PERMISSIONS.NEWS_MANAGE`, concedida por padrão a `administrador`
-e `diretoria`, exigida só pra publicar/editar/remover (`src/modules/news/`, mesmo padrão
-`commands.ts`/`queries.ts` dos outros módulos administráveis). Notícia é título + texto +
-imagem de capa opcional, via upload real pro Vercel Blob — mas com `access: "public"` (ao
-contrário dos anexos de obra, que são privados): é conteúdo institucional, não documento
-sensível, então a UI referencia a URL do blob direto no `<img>`, sem o proxy de download que
-`/api/anexos` usa. `/jornal` não pagina (`take: 30`), mesmo pragmatismo do resto do sistema
-pra listas que não costumam crescer descontroladamente.
+permissão pra leitura. Notícia era título + texto + imagem de capa opcional, via upload real
+pro Vercel Blob com `access: "public"` (ao contrário dos anexos de obra, que são privados).
+
+**Removido por completo** a pedido da Sepeng: passou a existir um sistema separado (fora
+deste repositório) pra ser "o que todo mundo vê e comenta" — este projeto volta a ser só o
+funcional que os setores usam pra tocar a obra. Saiu tudo: `src/modules/news/`, rota
+`/jornal`, model `NewsPost` (migration `20260813120000_drop_news_journal`), permissão
+`PERMISSIONS.NEWS_MANAGE`, e o post automático em marco de fluxo — `WorkflowStage.postsToJournal`,
+evento `stage.milestone_reached` e `news.published`, `createAutoNewsPost`, e o e-mail opt-in
+correspondente em `EMAIL_EVENTS`/`EmailPreferences.tsx` (o de Obra Ganha continua). Nenhum
+substituto ficou no lugar do "marco de fluxo" — se uma automação parecida for necessária de
+novo (ex.: pro sistema novo consumir via webhook), é escopo pra decidir quando aparecer, não
+antes.
+
+Rodar em produção: `prisma migrate deploy` (dropa `news_posts` e a coluna
+`postsToJournal`) e `scripts/sync-permissions.ts` de novo (tira `news:manage` de
+`administrador`/`diretoria` — mesma ressalva de sempre: a linha de `Permission` em si fica
+órfã no catálogo, inofensiva).
 
 ### Estrutura da Equipe da Obra — entregue
 
@@ -581,12 +592,16 @@ pra `src/core/notifications/events.ts` (antes vivia em `src/server/outbox.ts`, q
 `import type` de `db.ts`/Prisma) — `describe()` é `core` de verdade e não podia depender de
 `src/server/**`; `outbox.ts` agora reexporta de lá pra não quebrar nenhum import existente.
 
-**E-mail de "Obra Ganha"**: nova `PERMISSIONS.RECIPIENTS_MANAGE` (`recipients:manage`),
-cadastro simples em `/admin/avisos-externos` (`src/modules/recipients/`, clonado do
-esqueleto de `staff/`/`Professional` — sem relação com `User`) — lista curada por admin,
-não é opt-in. Dispara em `PROJECT_CREATED` (evento de ciclo de vida, não amarrado a etapa
-nenhuma — mesmo se o nome/`displayStatus` da etapa inicial mudar, continua funcionando),
-incondicional, mesmo padrão de `dispatchStaffAssignedEmail`.
+**E-mail de "Obra Ganha"**: dispara em `PROJECT_CREATED` (evento de ciclo de vida, não
+amarrado a etapa nenhuma — mesmo se o nome/`displayStatus` da etapa inicial mudar, continua
+funcionando). **Revisado ainda na mesma rodada**: a primeira versão era uma lista curada por
+admin, cadastro próprio sem relação com `User` (`/admin/avisos-externos`,
+`PERMISSIONS.RECIPIENTS_MANAGE`) — a pedido do usuário, virou opt-in por usuário cadastrado
+em `/admin/usuarios`, igual ao Jornal Sepeng (ver abaixo): quem já está no sistema decide se
+quer o aviso, sem cadastro paralelo. `/admin/avisos-externos`, `src/modules/recipients/` e
+`RECIPIENTS_MANAGE` foram removidos por completo (schema, permissão, UI) antes de chegar em
+produção de verdade — só um contato de teste, criado e apagado durante a verificação, chegou
+a existir na tabela.
 
 **Jornal automático em marcos**: `WorkflowStage` ganhou `postsToJournal` (campo de passagem
 versionado, mesmo padrão de `completionMode`) — quando uma etapa marcada é aberta
@@ -601,15 +616,22 @@ liga o flag nas etapas `isInitial`/`isFinal` do fluxo publicado (marco natural d
 fluxo, sem hardcode de `key`) — outras etapas exigem script à parte por enquanto, mesmo
 status de `completionMode` no editor visual.
 
-**Jornal por e-mail, opt-in**: `createNewsPost` (manual) e `createAutoNewsPost` (automático)
-enfileiram `news.published`. Canal `EMAIL` entrou em `NotificationPreference` — mas **não**
-foi pra matriz genérica de `/notificacoes` (`CONFIGURABLE_CHANNELS`), que já tinha um "toggle
-enganoso" discreto pra 3 eventos de conta sem dispatcher de e-mail nenhum; colocar EMAIL lá
-teria espalhado esse problema pras ~13 linhas restantes. Em vez disso, `newsEmailEnabled` é
-um campo dedicado em `MyNotificationSettings`, com seção própria na UI
-(`NewsEmailPreference.tsx`, ao lado de `WhatsAppPreferences`). Dispatcher pro e-mail do
-Jornal (`dispatchNewsEmail`) não usa `resolveRecipients` (escopado a obra, e Jornal é
-org-wide) nem cria `Notification` in-app (`/jornal` já é a superfície "pull").
+**Jornal por e-mail e Obra Ganha por e-mail são o mesmo mecanismo, opt-in por usuário**:
+`createNewsPost` (manual), `createAutoNewsPost` (automático) e `createProject` enfileiram
+`news.published`/`project.created`. Canal `EMAIL` entrou em `NotificationPreference` — mas
+**não** foi pra matriz genérica de `/notificacoes` (`CONFIGURABLE_CHANNELS`), que já tinha um
+"toggle enganoso" discreto pra 3 eventos de conta sem dispatcher de e-mail nenhum; colocar
+EMAIL lá teria espalhado esse problema pras ~13 linhas restantes. Em vez disso,
+`EMAIL_EVENTS` (`src/modules/notifications/queries.ts`) lista só os eventos com dispatcher
+de e-mail de verdade — hoje `project.created` e `news.published` — e vira `emailRows` em
+`MyNotificationSettings`, renderizado por um componente genérico
+(`EmailPreferences.tsx`, ao lado de `WhatsAppPreferences`; substituiu o
+`NewsEmailPreference.tsx` de uso único assim que apareceu o segundo evento). O dispatcher
+tem uma função só (`dispatchOptInEmail`, `src/modules/notifications/dispatcher.ts`) por trás
+dos dois: não usa `resolveRecipients` (escopado a obra; estes dois avisos são org-wide,
+"qualquer usuário cadastrado pode querer saber"), não cria `Notification` in-app (pra
+`news.published` a página `/jornal` já é a superfície "pull"; pra `project.created` o
+in-app já sai pelo caminho genérico de `resolveRecipients`, que continua intocado).
 
 **Dois achados de correção aproveitados na mesma rodada**, ambos fora do pedido original mas
 descobertos mexendo no código adjacente: `createDraftVersion` (clonagem de rascunho no
@@ -639,6 +661,71 @@ criado com `sourceEventId`, reprocessamento do mesmo evento sem duplicar post, a
 etapa não-marcada não gerando post, e clonagem de rascunho preservando `postsToJournal` de
 uma versão publicada pra outra.
 
+### Etapas paralelas Qualidade, Meio Ambiente e ADM — entregue (local)
+
+Item do checklist da Sepeng: três etapas novas — Qualidade, Meio Ambiente e ADM (CNO,
+Comunicação Prévia, Seguro, PCMSO) — independentes entre si, mas com trava de liberação: a
+etapa seguinte só libera quando as três estiverem concluídas. Mesmo mecanismo de "Etapas
+paralelas" já existente (`mode: "PARALLEL"` + `joinPolicy: "ALL"`, ver seção acima) — zero
+código novo, só dado, via `scripts/add-qualidade-meioambiente-adm.ts` (padrão
+draft+command-handlers+publish das migrações mais recentes, não o script raw-Prisma
+original).
+
+Diretoria — que já bifurcava em Segurança + RH (`scripts/demo-etapa-paralela.ts`) — passou a
+bifurcar em **5** ramos: Segurança, RH, Qualidade, Meio Ambiente e ADM, todos ao mesmo tempo.
+Segurança e RH deixaram de ser sequenciais entre si (eram Segurança → RH → Execução); agora
+os 5 ramos convergem direto em Execução, que só libera com `joinPolicy: "ALL"` (RH e
+Segurança já tinham essa policy herdada, não precisou mudar). Departamentos novos:
+`qualidade`, `meio_ambiente`, `adm` (fila própria por etapa, mesmo padrão dos demais — ainda
+sem membership/usuário associado, precisa cadastrar gente em `/admin/usuarios` pra alguém
+conseguir atuar nessas filas). Cada etapa nova ganhou só as duas ações básicas ("Concluir
+X" / "Devolver à Diretoria") — sem campos de formulário: os documentos por área (PGRCC,
+PQO, PGR, CNO/Comunicação Prévia/Seguro/PCMSO) são o próximo item do checklist, ainda não
+implementado.
+
+**Achado corrigido na mesma migração**: existia uma `WorkflowTransition` órfã saindo de
+Diretoria (clonada de rascunho em rascunho desde a v9, `actionId: null`, sem condição) que
+interceptava **qualquer** ação da etapa antes de `action.targetStageId` — `evaluateCondition`
+trata `condition: null` como "sempre satisfeita" (`src/core/workflow/conditions.ts`), e
+`resolveTargetStage` checa transições antes do fallback (`src/core/workflow/engine.ts`). Na
+prática, isso significava que "Devolver ao Orçamento" na Diretoria estava indo parar direto
+em Segurança havia várias versões, silenciosamente — mesma classe de bug (regressão
+silenciosa em versão de fluxo) já vista antes com `completionMode` da Diretoria. Removida e
+substituída pelas 5 transições explícitas, cada uma amarrada à ação "avancar" — "devolver"
+agora resolve certo por `action.targetStageId` de novo.
+
+`actionSchema` do editor de fluxos (`src/modules/workflow/commands.ts`) ainda não expõe a
+variante `"ghost"` do botão (só `primary`/`secondary`/`danger`), embora
+`DynamicStageForm.tsx` já saiba renderizá-la — mesma lacuna já documentada para
+`completionMode`/`company`/`area`/`avatarUrl`: o script cria a ação via `createAction` e
+ajusta `variant` direto por fora do schema depois.
+
+**Só local por enquanto** — fluxo publicado como v16 no banco local. Rodar em produção:
+`npx tsx scripts/add-qualidade-meioambiente-adm.ts` contra o Neon (`DATABASE_URL` de
+produção). Sem migration de schema envolvida (não mexeu no `schema.prisma`), só dado de
+fluxo — não precisa de `prisma migrate deploy`.
+
+### Etapa Execução renomeada para Engenharia — entregue (local)
+
+Item do checklist: "Renomear a etapa Engenharia". Confirmado com o usuário que era a etapa
+"Obra em Execução" (`key: execucao`) que precisava do nome novo — só o `name`
+(`scripts/rename-execucao-engenharia.ts`, mesmo padrão draft+`updateStage`+publish).
+`displayStatus` ("Obra em Execução" — o que aparece pra quem acompanha a obra), `key`,
+departamento (`Execução de Obra`) e tudo mais ficaram como estavam, de propósito — o pedido
+foi só o nome. Publicado como v17 local. **Só local por enquanto**, falta rodar contra o
+Neon.
+
+### Documentos por área (PQO, PGRCC, PGR) — entregue (local)
+
+Item do checklist: um campo `FILE` por etapa (upload real pro Vercel Blob, privado — mesmo
+mecanismo de "Upload real de anexos", ver seção acima), obrigatório
+(`scripts/add-area-documents.ts`, mesmo padrão draft+`createField`+publish): Qualidade →
+PQO (Plano de Qualidade da Obra), Meio Ambiente → PGRCC (Programa de Gerenciamento de
+Resíduos da Construção Civil), Segurança → PGR (Programa de Gerenciamento de Riscos). RH
+ficou de fora — quais documentos exigir lá ainda está em aberto no checklist da Sepeng
+(marcado com ⚠️). Publicado como v18 local. **Só local por enquanto**, falta rodar contra o
+Neon.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
@@ -664,15 +751,39 @@ real".
 
 Uma quinta rodada entregou o feed de atualizações, o aviso de Obra Ganha e o Jornal dirigido
 (ver seção acima) — **já aplicada em produção**: migration (`prisma migrate deploy`),
-`scripts/sync-permissions.ts` (`recipients:manage` nos papéis) e
-`scripts/enable-journal-milestones.ts` (Orçamento/Obra Finalizada marcados) rodados contra o
-Neon, fluxo publicado como v11. No mesmo processo, achou-se e corrigiu-se em produção a
-regressão da Diretoria descrita acima (`scripts/fix-diretoria-completion-mode.ts`).
+`scripts/sync-permissions.ts` e `scripts/enable-journal-milestones.ts`
+(Orçamento/Obra Finalizada marcados) rodados contra o Neon, fluxo publicado como v11. No
+mesmo processo, achou-se e corrigiu-se em produção a regressão da Diretoria descrita acima
+(`scripts/fix-diretoria-completion-mode.ts`). **Pendência nova, ainda não deployada**: logo
+em seguida o desenho do aviso de Obra Ganha mudou (lista curada → opt-in por usuário, ver
+seção acima) — o código local já reflete isso, mas produção ainda está com a versão antiga:
+tabela `external_notification_recipients` (vazia, sem risco de perda de dado) e a
+concessão de `recipients:manage` aos papéis seguem em produção até rodar `prisma migrate
+deploy` de novo (dropa a tabela) e `scripts/sync-permissions.ts` de novo (tira a permissão
+de todos os papéis — `sync-permissions.ts` nunca apaga a linha de `Permission` em si, só
+upserta o catálogo atual e recria `RolePermission`; a chave `recipients:manage` fica
+órfã no catálogo até uma limpeza manual, inofensiva porque nada mais no código a checa).
+
+Uma sexta rodada removeu o Jornal Sepeng por completo (ver seção correspondente acima) —
+**só local por enquanto**: `prisma migrate deploy` e `scripts/sync-permissions.ts` ainda
+precisam rodar contra o Neon pra produção acompanhar (dropar `news_posts`/`postsToJournal`
+e tirar `news:manage` dos papéis).
+
+Uma sétima rodada, a partir do checklist novo da Sepeng, adicionou as etapas paralelas
+Qualidade/Meio Ambiente/ADM com trava de liberação (ver seção acima) — **só local por
+enquanto**, falta rodar `scripts/add-qualidade-meioambiente-adm.ts` contra o Neon. Restam do
+mesmo checklist: renomear a etapa Execução pra "Engenharia" (o usuário confirmou que é o
+nome da etapa "Obra em Execução" que muda, não uma etapa nova), documentos por área (PGRCC
+em Meio Ambiente, PQO em Qualidade, PGR em Segurança, RH ainda a definir quais), ativação da
+Alexa e emissão de relatórios — explicitamente fora de escopo por enquanto: qualquer
+integração com o Jornal Sepeng, removido do repositório e hoje um sistema à parte (ver seção
+"Jornal Sepeng — entregue e depois removido").
 
 Próximos candidatos sem ordem definida: reset de senha ("esqueci minha senha" — a única
 lacuna do levantamento de segurança que ainda falta), controles no editor visual pra
-`completionMode`/`externalCompletionPath`/`postsToJournal` (hoje só por script), paginação/
-filtros mais ricos nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe
-da obra, e o que a Sepeng priorizar no uso real. Vale conferir periodicamente se a
-documentação deste arquivo segue batendo com o estado real de produção (`prisma migrate
+`completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais ricos
+nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe da obra, as
+funcionalidades por etapa da obra que a Sepeng está desenhando agora que o Jornal virou um
+sistema separado, e o que mais a Sepeng priorizar no uso real. Vale conferir periodicamente
+se a documentação deste arquivo segue batendo com o estado real de produção (`prisma migrate
 status` contra o Neon é a fonte da verdade, não o texto aqui) — já divergiu uma vez.
