@@ -661,7 +661,7 @@ criado com `sourceEventId`, reprocessamento do mesmo evento sem duplicar post, a
 etapa não-marcada não gerando post, e clonagem de rascunho preservando `postsToJournal` de
 uma versão publicada pra outra.
 
-### Etapas paralelas Qualidade, Meio Ambiente e ADM — entregue (local)
+### Etapas paralelas Qualidade, Meio Ambiente e ADM — entregue
 
 Item do checklist da Sepeng: três etapas novas — Qualidade, Meio Ambiente e ADM (CNO,
 Comunicação Prévia, Seguro, PCMSO) — independentes entre si, mas com trava de liberação: a
@@ -700,22 +700,25 @@ variante `"ghost"` do botão (só `primary`/`secondary`/`danger`), embora
 `completionMode`/`company`/`area`/`avatarUrl`: o script cria a ação via `createAction` e
 ajusta `variant` direto por fora do schema depois.
 
-**Só local por enquanto** — fluxo publicado como v16 no banco local. Rodar em produção:
-`npx tsx scripts/add-qualidade-meioambiente-adm.ts` contra o Neon (`DATABASE_URL` de
-produção). Sem migration de schema envolvida (não mexeu no `schema.prisma`), só dado de
-fluxo — não precisa de `prisma migrate deploy`.
+Rodado localmente (v16) e depois contra o Neon — produção não tinha a etapa Jurídico nem
+Diretoria em `PARALLEL` (só existiam localmente, de um script de demonstração anterior que
+nunca rodou em produção); o script não depende de nenhum dos dois, só de
+orcamento/diretoria/seguranca/rh/execucao existirem, então rodou limpo direto de v11 pra
+v12. A mesma transição órfã (achado abaixo) também existia em produção — corrigida no mesmo
+`npx tsx scripts/add-qualidade-meioambiente-adm.ts`. Sem migration de schema envolvida (não
+mexeu no `schema.prisma`), só dado de fluxo — não precisou de `prisma migrate deploy`. **Em
+produção** desde a v12.
 
-### Etapa Execução renomeada para Engenharia — entregue (local)
+### Etapa Execução renomeada para Engenharia — entregue
 
 Item do checklist: "Renomear a etapa Engenharia". Confirmado com o usuário que era a etapa
 "Obra em Execução" (`key: execucao`) que precisava do nome novo — só o `name`
 (`scripts/rename-execucao-engenharia.ts`, mesmo padrão draft+`updateStage`+publish).
 `displayStatus` ("Obra em Execução" — o que aparece pra quem acompanha a obra), `key`,
 departamento (`Execução de Obra`) e tudo mais ficaram como estavam, de propósito — o pedido
-foi só o nome. Publicado como v17 local. **Só local por enquanto**, falta rodar contra o
-Neon.
+foi só o nome. **Em produção** desde a v13.
 
-### Documentos por área (PQO, PGRCC, PGR) — entregue (local)
+### Documentos por área (PQO, PGRCC, PGR) — entregue
 
 Item do checklist: um campo `FILE` por etapa (upload real pro Vercel Blob, privado — mesmo
 mecanismo de "Upload real de anexos", ver seção acima), obrigatório
@@ -723,8 +726,7 @@ mecanismo de "Upload real de anexos", ver seção acima), obrigatório
 PQO (Plano de Qualidade da Obra), Meio Ambiente → PGRCC (Programa de Gerenciamento de
 Resíduos da Construção Civil), Segurança → PGR (Programa de Gerenciamento de Riscos). RH
 ficou de fora — quais documentos exigir lá ainda está em aberto no checklist da Sepeng
-(marcado com ⚠️). Publicado como v18 local. **Só local por enquanto**, falta rodar contra o
-Neon.
+(marcado com ⚠️). **Em produção** desde a v14.
 
 ### Próximos passos (V1)
 
@@ -770,14 +772,19 @@ precisam rodar contra o Neon pra produção acompanhar (dropar `news_posts`/`pos
 e tirar `news:manage` dos papéis).
 
 Uma sétima rodada, a partir do checklist novo da Sepeng, adicionou as etapas paralelas
-Qualidade/Meio Ambiente/ADM com trava de liberação (ver seção acima) — **só local por
-enquanto**, falta rodar `scripts/add-qualidade-meioambiente-adm.ts` contra o Neon. Restam do
-mesmo checklist: renomear a etapa Execução pra "Engenharia" (o usuário confirmou que é o
-nome da etapa "Obra em Execução" que muda, não uma etapa nova), documentos por área (PGRCC
-em Meio Ambiente, PQO em Qualidade, PGR em Segurança, RH ainda a definir quais), ativação da
-Alexa e emissão de relatórios — explicitamente fora de escopo por enquanto: qualquer
-integração com o Jornal Sepeng, removido do repositório e hoje um sistema à parte (ver seção
-"Jornal Sepeng — entregue e depois removido").
+Qualidade/Meio Ambiente/ADM com trava de liberação, renomeou Execução pra "Engenharia" (o
+usuário confirmou que era o nome da etapa "Obra em Execução" que mudava, não uma etapa nova)
+e adicionou os documentos por área (PGRCC em Meio Ambiente, PQO em Qualidade, PGR em
+Segurança) — ver seções acima. **Já aplicada em produção** (v12/v13/v14 contra o Neon, na
+mesma sessão em que foi feita localmente). De quebra, uma transição órfã que já existia em
+produção (não só local) — "Devolver ao Orçamento" na Diretoria indo parar em Segurança por
+engano — foi corrigida junto. Restam do mesmo checklist: quais documentos exigir em RH
+(ainda em aberto, marcado ⚠️ pela própria Sepeng), ativação da Alexa e emissão de
+relatórios — explicitamente fora de escopo por enquanto: qualquer integração com o Jornal
+Sepeng, removido do repositório e hoje um sistema à parte (ver seção "Jornal Sepeng —
+entregue e depois removido"); um adapter de sincronização via webhook para essa integração
+que já existia solto no working tree (não escrito nesta sessão) foi removido a pedido do
+usuário antes de commitar, junto com o resto do módulo Jornal.
 
 Próximos candidatos sem ordem definida: reset de senha ("esqueci minha senha" — a única
 lacuna do levantamento de segurança que ainda falta), controles no editor visual pra
