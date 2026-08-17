@@ -718,17 +718,23 @@ Item do checklist: "Renomear a etapa Engenharia". Confirmado com o usuário que 
 departamento (`Execução de Obra`) e tudo mais ficaram como estavam, de propósito — o pedido
 foi só o nome. **Em produção** desde a v13.
 
-### Documentos por área (PQO, PGRCC, PGR) — entregue
+### Documentos por área (PQO, PGRCC, PGR, ADM) — entregue
 
 Item do checklist: um campo `FILE` por etapa (upload real pro Vercel Blob, privado — mesmo
 mecanismo de "Upload real de anexos", ver seção acima), obrigatório
 (`scripts/add-area-documents.ts`, mesmo padrão draft+`createField`+publish): Qualidade →
 PQO (Plano de Qualidade da Obra), Meio Ambiente → PGRCC (Programa de Gerenciamento de
-Resíduos da Construção Civil), Segurança → PGR (Programa de Gerenciamento de Riscos). RH
-ficou de fora — quais documentos exigir lá ainda está em aberto no checklist da Sepeng
-(marcado com ⚠️). **Em produção** desde a v14.
+Resíduos da Construção Civil), Segurança → PGR (Programa de Gerenciamento de Riscos).
 
-### Ativação da Alexa (obra ganha) — código pronto, credencial pendente
+Numa rodada posterior, `scripts/add-adm-documents.ts` (mesmo padrão) fechou os quatro
+documentos da etapa ADM que tinham ficado pendentes: CNO (Cadastro Nacional de Obra),
+Comunicação Prévia (de início de obra, Ministério do Trabalho/CAIXA), Seguro (apólice da
+obra) e PCMSO (Programa de Controle Médico de Saúde Ocupacional) — os dois últimos sem
+sigla própria no rótulo, só o nome. RH continua de fora — quais documentos exigir lá ainda
+está em aberto no checklist da Sepeng (marcado com ⚠️). **Em produção** desde a v14
+(Qualidade/Meio Ambiente/Segurança) e v15 (ADM).
+
+### Ativação da Alexa (obra ganha) — entregue
 
 Item do checklist: "Ativação da Alexa para o ObraFlow". Escopo esclarecido com o usuário —
 não é uma Alexa Skill de verdade (bidirecional, com conta de desenvolvedor Amazon), é
@@ -751,11 +757,11 @@ Disparado em `project.created` (`dispatchAlexaRoutine` em `dispatcher.ts`, mesmo
 "Obra Ganha" por e-mail) — nunca lança, falha (credencial ausente, API fora do ar) só loga,
 não derruba o evento nem os outros efeitos colaterais.
 
-**Credenciais ainda não provisionadas** — precisa de `SINRICPRO_API_KEY` (dashboard
-SinricPro → Credentials) e `SINRICPRO_DEVICE_ID` (id do Switch virtual já associado à rotina
-da Alexa) via `vercel env add` (Produção e Preview). Sem elas, o dispatch falha silenciosamente
-(log de erro, evento continua `DONE`) — não trava nada, só não dispara a Alexa até a
-credencial existir.
+**Credenciais provisionadas**: `SINRICPRO_API_KEY` e `SINRICPRO_DEVICE_ID` configuradas via
+`vercel env add` em Produção, Preview e no `.env` local. A partir de agora toda obra
+cadastrada (`project.created`) dispara a rotina de verdade — se a API estiver fora do ar ou a
+credencial for revogada, o dispatch falha silenciosamente (log de erro, evento continua
+`DONE`), não trava o cadastro da obra nem os outros efeitos colaterais.
 
 ### Próximos passos (V1)
 
@@ -815,11 +821,28 @@ entregue e depois removido"); um adapter de sincronização via webhook para ess
 que já existia solto no working tree (não escrito nesta sessão) foi removido a pedido do
 usuário antes de commitar, junto com o resto do módulo Jornal.
 
+Uma oitava rodada entregou a ativação da Alexa (código já existia no working tree no início
+da sessão, sem credencial — ver seção acima) e fechou os documentos por área da etapa ADM.
+Nessa sessão, ao zerar dados de obra locais pra testar a sétima rodada, achou-se uma
+regressão real: a Diretoria tinha voltado a `completionMode: FORM` no fluxo **local**
+(v15–v18, versões sem registro neste arquivo — provavelmente edições soltas pelo editor
+visual em teste anterior), mesmo bug de clonagem já documentado antes.
+`scripts/fix-diretoria-completion-mode.ts` foi rodado de novo só localmente (v19); conferido
+contra o Neon e produção **nunca teve esse problema** (seguia `EXTERNAL` desde a v8, correto
+na v14). Também descoberto e removido só localmente: uma etapa "Jurídico" resquício de
+`scripts/demo-inserir-etapa.ts` que nunca existiu em produção nem fazia parte do fluxo
+pedido pela Sepeng (`scripts/remove-juridico-stage.ts`, v20) — produção vai direto de
+Orçamento pra Diretoria, sem Jurídico, e é isso que o local deveria refletir. `git push`
+pra `main` (commit `33c68b8`) disparou o deploy de produção da ativação da Alexa; os
+documentos da ADM (`scripts/add-adm-documents.ts`) rodaram contra local e Neon na mesma
+sessão, v21 local / v15 produção.
+
 Próximos candidatos sem ordem definida: reset de senha ("esqueci minha senha" — a única
 lacuna do levantamento de segurança que ainda falta), controles no editor visual pra
 `completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais ricos
-nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe da obra, as
-funcionalidades por etapa da obra que a Sepeng está desenhando agora que o Jornal virou um
-sistema separado, e o que mais a Sepeng priorizar no uso real. Vale conferir periodicamente
-se a documentação deste arquivo segue batendo com o estado real de produção (`prisma migrate
-status` contra o Neon é a fonte da verdade, não o texto aqui) — já divergiu uma vez.
+nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe da obra, quais
+documentos exigir em RH (ainda ⚠️ em aberto), emissão de relatórios, as funcionalidades por
+etapa da obra que a Sepeng está desenhando agora que o Jornal virou um sistema separado, e o
+que mais a Sepeng priorizar no uso real. Vale conferir periodicamente se a documentação deste
+arquivo segue batendo com o estado real de produção (`prisma migrate status` contra o Neon é
+a fonte da verdade, não o texto aqui) — já divergiu mais de uma vez.
