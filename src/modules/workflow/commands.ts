@@ -158,9 +158,10 @@ export async function createDraftVersion(actor: SessionContext, input: { definit
       }
 
       // Segunda passada: as ações só podem apontar para etapas que já existam.
+      const actionIdMap = new Map<string, string>();
       for (const stage of latest.stages) {
         for (const action of stage.actions) {
-          await tx.stageAction.create({
+          const created = await tx.stageAction.create({
             data: {
               organizationId: actor.organizationId,
               stageId: stageIdMap.get(stage.id)!,
@@ -176,6 +177,7 @@ export async function createDraftVersion(actor: SessionContext, input: { definit
               variant: action.variant,
             },
           });
+          actionIdMap.set(action.id, created.id);
         }
       }
 
@@ -186,9 +188,16 @@ export async function createDraftVersion(actor: SessionContext, input: { definit
             versionId: draft.id,
             fromStageId: stageIdMap.get(transition.fromStageId)!,
             toStageId: stageIdMap.get(transition.toStageId)!,
-            // A ação de origem pertence à versão antiga — a transição clonada
-            // passa a valer para qualquer ação da etapa até ser reconfigurada.
-            actionId: null,
+            // A ação de origem pertence à versão antiga — remapeia pelo id
+            // da ação clonada correspondente (mesma stageIdMap de cima, só
+            // que para ações). Uma transição "qualquer ação" (actionId nulo
+            // na origem) continua nula depois de clonada — só transições já
+            // amarradas a uma ação específica precisam ser remapeadas. Sem
+            // isso, toda transição amarrada virava "qualquer ação" a cada
+            // clonagem — silenciosamente sequestrando o destino de outras
+            // ações da mesma etapa (achado real: "Devolver ao Orçamento" na
+            // Diretoria caindo em Segurança depois de qualquer draft novo).
+            actionId: transition.actionId ? (actionIdMap.get(transition.actionId) ?? null) : null,
             condition: transition.condition ?? undefined,
             order: transition.order,
           },
