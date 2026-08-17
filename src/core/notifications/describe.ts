@@ -40,6 +40,10 @@ export interface EventPayload {
   name?: string;
   email?: string;
   token?: string;
+  /** user.credentials_issued — nunca persiste além do envio, ver dispatcher. */
+  password?: string;
+  /** user.credentials_issued — "created" (conta nova) ou "password_reset" (admin redefiniu). */
+  reason?: "created" | "password_reset";
 }
 
 export function describe(type: string, p: EventPayload): { title: string; body: string } {

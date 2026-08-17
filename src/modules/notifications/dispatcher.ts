@@ -204,6 +204,44 @@ async function dispatchAlexaRoutine(): Promise<void> {
 }
 
 /**
+ * `user.credentials_issued` — conta criada ou senha redefinida por um admin em
+ * `/admin/usuarios`. A pessoa ainda não consegue logar até receber a senha (e
+ * `Notification` in-app exigiria ela já estar logada, contraditório aqui), então
+ * o aviso só chega por e-mail — nunca passa pela preferência opt-in (não é
+ * opcional, é a própria credencial de acesso).
+ *
+ * A senha em texto puro só existe no payload até este ponto: depois de
+ * confirmar o envio, `eventId` é usado pra redigir o campo diretamente no
+ * `OutboxEvent` (ele não é apagado, então sem isso a senha ficaria em texto
+ * puro na tabela pra sempre).
+ */
+async function dispatchUserCredentialsEmail(eventId: string, payload: EventPayload): Promise<void> {
+  if (!payload.email || !payload.password) return;
+
+  const isReset = payload.reason === "password_reset";
+  const subject = isReset ? "Sua senha no ObraFlow foi redefinida" : "Sua conta no ObraFlow foi criada";
+  const loginUrl = `${getAppUrl()}/login`;
+  const html = `
+    <p>Olá, ${payload.name ?? ""},</p>
+    <p>${isReset ? "Um administrador redefiniu a senha da sua conta no ObraFlow." : "Um administrador criou uma conta pra você no ObraFlow."}</p>
+    <p>E-mail: <strong>${payload.email}</strong><br>
+    Senha: <strong>${payload.password}</strong></p>
+    <p><a href="${loginUrl}">${loginUrl}</a></p>
+    <p>Se quiser trocar a senha depois, peça a um administrador.</p>
+  `;
+
+  try {
+    await sendEmail(payload.email, subject, html);
+    await prisma.outboxEvent.update({
+      where: { id: eventId },
+      data: { payload: { ...payload, password: "[enviado — redigido após o envio]" } },
+    });
+  } catch (error) {
+    console.error(`Falha ao enviar e-mail de credenciais (usuário ${payload.userId}):`, error);
+  }
+}
+
+/**
  * `email_verification.requested` — cadastro próprio (`/cadastro`). A pessoa ainda
  * não consegue logar (sem `Notification` in-app possível), então o link só chega
  * por e-mail.
@@ -277,6 +315,8 @@ export async function processOutbox(limit = 50): Promise<number> {
         await dispatchEmailVerificationEmail(payload);
       } else if (event.type === DOMAIN_EVENTS.SIGNUP_PENDING_APPROVAL) {
         await dispatchSignupPendingApproval(event.organizationId, payload);
+      } else if (event.type === DOMAIN_EVENTS.USER_CREDENTIALS_ISSUED) {
+        await dispatchUserCredentialsEmail(event.id, payload);
       } else {
         const recipients = await resolveRecipients(event.organizationId, event.type as DomainEventType, payload);
         const { title, body } = describe(event.type, payload);

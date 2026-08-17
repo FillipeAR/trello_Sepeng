@@ -24,6 +24,8 @@ export const DOMAIN_EVENTS = {
   EMAIL_VERIFICATION_REQUESTED: "email_verification.requested",
   /** E-mail confirmado num cadastro próprio — falta aprovação de um admin. */
   SIGNUP_PENDING_APPROVAL: "signup.pending_approval",
+  /** Conta criada por um admin (`/admin/usuarios`) ou senha redefinida por um admin — avisa a credencial por e-mail. */
+  USER_CREDENTIALS_ISSUED: "user.credentials_issued",
 } as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];

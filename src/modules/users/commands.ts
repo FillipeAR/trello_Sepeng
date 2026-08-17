@@ -6,6 +6,7 @@ import type { SessionContext } from "@/server/actor";
 import { prisma } from "@/server/db";
 import { writeAudit } from "@/server/audit";
 import { CommandError } from "@/modules/projects/commands";
+import { enqueueUserCredentialsEvent } from "./notify";
 
 /**
  * Contas de login (`User` + `Membership`) por setor. Antes só existiam via
@@ -102,6 +103,15 @@ export async function createUser(actor: SessionContext, input: { data: unknown }
       after: { name: user.name, email: user.email, roleId: role.id, departmentId: data.departmentId ?? null },
     });
 
+    await enqueueUserCredentialsEvent(tx, {
+      organizationId: actor.organizationId,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      password: data.password,
+      reason: "created",
+    });
+
     return user;
   });
 }
@@ -143,6 +153,17 @@ export async function updateUser(actor: SessionContext, input: { userId: string;
       before: { name: membership.user.name, roleId: membership.roleId, departmentId: membership.departmentId },
       after: { name: user.name, roleId: role.id, departmentId: data.departmentId ?? null },
     });
+
+    if (passwordHash && data.password) {
+      await enqueueUserCredentialsEvent(tx, {
+        organizationId: actor.organizationId,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        password: data.password,
+        reason: "password_reset",
+      });
+    }
 
     return user;
   });
