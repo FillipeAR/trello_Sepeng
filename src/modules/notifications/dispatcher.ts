@@ -6,6 +6,7 @@ import { resolveChannelEnabled } from "@/core/notifications/preferences";
 import { describe, type EventPayload } from "@/core/notifications/describe";
 import { sendWhatsAppMessage } from "./whatsapp";
 import { sendEmail } from "./email";
+import { triggerObraGanhaRoutine } from "./sinricpro";
 
 /**
  * Worker do outbox. Entrega notificação in-app (sempre) e WhatsApp
@@ -188,6 +189,21 @@ async function dispatchProjectCreatedEmail(organizationId: string, payload: Even
 }
 
 /**
+ * `project.created` → rotina da Alexa do escritório (via SinricPro, ver
+ * `sinricpro.ts`). Nunca lança: uma falha aqui (credencial ausente, API
+ * fora do ar) não deve derrubar o evento nem os outros efeitos colaterais
+ * de "obra ganha" — mesmo padrão de "falha no WhatsApp não derruba o
+ * evento" já usado no resto deste worker.
+ */
+async function dispatchAlexaRoutine(): Promise<void> {
+  try {
+    await triggerObraGanhaRoutine();
+  } catch (error) {
+    console.error("Falha ao acionar rotina da Alexa (SinricPro):", error);
+  }
+}
+
+/**
  * `email_verification.requested` — cadastro próprio (`/cadastro`). A pessoa ainda
  * não consegue logar (sem `Notification` in-app possível), então o link só chega
  * por e-mail.
@@ -282,6 +298,7 @@ export async function processOutbox(limit = 50): Promise<number> {
 
         if (event.type === DOMAIN_EVENTS.PROJECT_CREATED) {
           await dispatchProjectCreatedEmail(event.organizationId, payload);
+          await dispatchAlexaRoutine();
         }
       }
 

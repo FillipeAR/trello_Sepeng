@@ -728,6 +728,35 @@ Resíduos da Construção Civil), Segurança → PGR (Programa de Gerenciamento 
 ficou de fora — quais documentos exigir lá ainda está em aberto no checklist da Sepeng
 (marcado com ⚠️). **Em produção** desde a v14.
 
+### Ativação da Alexa (obra ganha) — código pronto, credencial pendente
+
+Item do checklist: "Ativação da Alexa para o ObraFlow". Escopo esclarecido com o usuário —
+não é uma Alexa Skill de verdade (bidirecional, com conta de desenvolvedor Amazon), é
+disparar uma rotina do Alexa já configurada no app Alexa (fora deste repositório) sempre que
+uma obra é ganha, mesmo padrão de trigger que o antigo adapter do Jornal Sepeng prometia mas
+nunca implementava de fato (aquele código só chamava um webhook do outro app; quem de fato
+acionava a Alexa vivia lá, não aqui).
+
+Mecanismo: [SinricPro](https://sinric.pro) — serviço que expõe um dispositivo virtual
+(Switch) pro ecossistema Alexa. `src/modules/notifications/sinricpro.ts`
+(`triggerObraGanhaRoutine`) autentica na API deles (`POST /api/v1/auth` com
+`SINRICPRO_API_KEY`, troca por um access token de 7 dias — reautentica a cada disparo em vez
+de cachear, evento é raro) e liga o dispositivo (`GET /api/v1/devices/:id/action` com
+`action=setPowerState&value={"state":"On"}`) — a rotina que o usuário já configurou no app
+Alexa ("quando o dispositivo liga, faça X") dispara a partir daí. Sem SDK oficial pra
+Node — chamada HTTP direta, mesmo padrão do adapter de WhatsApp
+(`src/modules/notifications/whatsapp.ts`).
+
+Disparado em `project.created` (`dispatchAlexaRoutine` em `dispatcher.ts`, mesmo evento de
+"Obra Ganha" por e-mail) — nunca lança, falha (credencial ausente, API fora do ar) só loga,
+não derruba o evento nem os outros efeitos colaterais.
+
+**Credenciais ainda não provisionadas** — precisa de `SINRICPRO_API_KEY` (dashboard
+SinricPro → Credentials) e `SINRICPRO_DEVICE_ID` (id do Switch virtual já associado à rotina
+da Alexa) via `vercel env add` (Produção e Preview). Sem elas, o dispatch falha silenciosamente
+(log de erro, evento continua `DONE`) — não trava nada, só não dispara a Alexa até a
+credencial existir.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
