@@ -83,6 +83,7 @@ export interface ProjectListItem {
   dueAt: Date | null;
   activeStageCount: number;
   activeStageKeys: string[];
+  activeStageNames: string[];
   isLate: boolean;
   manager: string | null;
 }
@@ -188,6 +189,7 @@ export async function listProjects(
         dueAt: primary?.dueAt ?? null,
         activeStageCount: active.length,
         activeStageKeys: active.map((si) => si.stage.key),
+        activeStageNames: active.map((si) => si.stage.name),
         isLate: p.status === "ACTIVE" && late,
         manager: p.team.find((t) => t.role === "MANAGER")?.user.name ?? null,
       };
@@ -195,6 +197,28 @@ export async function listProjects(
     .filter((p) => (filters.onlyLate ? p.isLate : true));
 
   return { items, nextCursor };
+}
+
+/**
+ * Todas as obras que passam pelo filtro, sem paginação — só pra exportação
+ * de relatório (`/api/relatorios/obras`). Nunca usar em tela de listagem:
+ * `listProjects` é paginado de propósito, ver comentário acima.
+ */
+export async function listAllProjectsForExport(
+  actor: SessionContext,
+  filters: Omit<ProjectListFilters, "cursor" | "limit"> = {},
+): Promise<ProjectListItem[]> {
+  const items: ProjectListItem[] = [];
+  let cursor: string | undefined;
+
+  for (;;) {
+    const page = await listProjects(actor, { ...filters, cursor, limit: 200 });
+    items.push(...page.items);
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+
+  return items;
 }
 
 export interface TimelineStep {

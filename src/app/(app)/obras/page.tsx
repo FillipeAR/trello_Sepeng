@@ -111,6 +111,9 @@ export default async function ObrasPage({
         <button type="submit" className="btn-ghost">
           Filtrar
         </button>
+        <button type="submit" formAction="/api/relatorios/obras" className="btn-ghost">
+          Exportar CSV
+        </button>
       </form>
 
       {projects.length === 0 ? (
