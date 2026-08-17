@@ -48,6 +48,7 @@ src/
     workflow/engine.ts       ← regra central: transições, validação, SLA, progresso
     workflow/conditions.ts   ← avaliador de condições declarativas
     workflow/types.ts        ← formas puras do fluxo
+    workflow/healthcheck.ts  ← checagens estruturais da versão publicada (scripts/healthcheck-workflow.ts)
     rbac/permissions.ts      ← catálogo de permissões + papéis padrão
     rbac/can.ts              ← canReadProject, canActOnStage
     audit/diff.ts            ← diff antes/depois
@@ -762,6 +763,36 @@ não derruba o evento nem os outros efeitos colaterais.
 cadastrada (`project.created`) dispara a rotina de verdade — se a API estiver fora do ar ou a
 credencial for revogada, o dispatch falha silenciosamente (log de erro, evento continua
 `DONE`), não trava o cadastro da obra nem os outros efeitos colaterais.
+
+### Healthcheck do fluxo — entregue
+
+Pedido depois de dois achados consecutivos de regressão silenciosa em `WorkflowVersion`
+(`completionMode` da Diretoria e a transição "coringa" sequestrando "Devolver ao Orçamento",
+ambos descritos acima): um script que audita a versão publicada e pega esse tipo de
+configuração quebrada antes de virar incidente. Checagens puras e testadas em
+`src/core/workflow/healthcheck.ts` (`checkWorkflowHealth`, `healthcheck.test.ts`) —
+`completionMode: "EXTERNAL"` sem `externalCompletionPath`; etapa não-final sem nenhuma ação;
+etapa `PARALLEL` com menos de 2 ramos configurados via `WorkflowTransition`; e transição
+"coringa" (sem `actionId`, incondicional) competindo com o `targetStageId` explícito de outra
+ação da mesma etapa. `scripts/healthcheck-workflow.ts` roda isso contra a versão publicada de
+cada organização (local ou produção, via `DATABASE_URL`) e sai com código 1 se achar algo —
+dá pra plugar num cron depois, hoje é rodado manualmente.
+
+**Achou um bug real e ativo na primeira execução**: `createDraftVersion` zerava `actionId` de
+toda `WorkflowTransition` clonada (o comentário no código dizia ser intencional, "até ser
+reconfigurada" — mas nada reconfigura sozinho). Efeito prático: **toda vez** que um rascunho
+novo é criado a partir de uma versão com uma etapa `PARALLEL` cujas transições de bifurcação
+já tinham sido amarradas a uma ação específica (ver "Etapas paralelas Qualidade, Meio
+Ambiente e ADM" acima), a clonagem desfazia esse vínculo e reabria exatamente o bug de
+"Devolver ao Orçamento" na Diretoria caindo em Segurança do Trabalho — já tinha sido corrigido
+uma vez, e voltou sozinho na migração dos documentos da ADM (rodada anterior desta mesma
+sessão), tanto local quanto **em produção**. Corrigido a causa raiz remapeando `actionId` pela
+ação clonada correspondente (mesmo princípio do `stageIdMap` que já existia pra
+`targetStageId`) — `scripts/fix-diretoria-devolver-transition.ts` reparou o dado já quebrado
+(idempotente, reutilizável se algo parecido aparecer em outra etapa). Local: v19 (fix do
+completionMode) → v20 (remoção do Jurídico) → v21 (docs ADM, ainda quebrado) → v22 (dado
+reparado) → v23 (clonagem extra só pra confirmar que o fix de código segura). Produção: v15
+(docs ADM, quebrado) → v16 (reparado, com o fix de código já no ar).
 
 ### Próximos passos (V1)
 
