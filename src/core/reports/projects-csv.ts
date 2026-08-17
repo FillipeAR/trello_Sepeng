@@ -13,19 +13,27 @@ export interface ProjectCsvRow {
   manager: string;
 }
 
+/**
+ * Rótulos em caixa alta — mesmo estilo da planilha "Acompanhamento de
+ * Orçamentos" da Sepeng, que este export tenta ficar parecido. Não dá pra
+ * ir além de rótulo: campos da planilha sobre a fase de proposta (status
+ * da proposta, responsável pelo orçamento, datas de recebimento/visita/
+ * envio, valor final enviado) não existem no ObraFlow — são dado de antes
+ * da obra ser cadastrada no sistema, fora do escopo deste export.
+ */
 const HEADERS: { key: keyof ProjectCsvRow; label: string }[] = [
-  { key: "code", label: "Código" },
-  { key: "name", label: "Obra" },
-  { key: "client", label: "Cliente" },
-  { key: "location", label: "Localização" },
-  { key: "stageName", label: "Etapa atual" },
-  { key: "displayStatus", label: "Status" },
-  { key: "departmentName", label: "Departamento" },
-  { key: "progressPercent", label: "Progresso" },
-  { key: "contractValue", label: "Valor de contrato" },
-  { key: "plannedEndDate", label: "Previsão de entrega" },
-  { key: "isLate", label: "Atrasada" },
-  { key: "manager", label: "Gerente" },
+  { key: "code", label: "CÓDIGO" },
+  { key: "name", label: "OBRA" },
+  { key: "client", label: "CLIENTE" },
+  { key: "location", label: "LOCALIZAÇÃO" },
+  { key: "stageName", label: "ETAPA ATUAL" },
+  { key: "displayStatus", label: "STATUS" },
+  { key: "departmentName", label: "DEPARTAMENTO" },
+  { key: "progressPercent", label: "PROGRESSO" },
+  { key: "contractValue", label: "VALOR DO CONTRATO (R$)" },
+  { key: "plannedEndDate", label: "PREVISÃO DE ENTREGA" },
+  { key: "isLate", label: "ATRASADA" },
+  { key: "manager", label: "GERENTE" },
 ];
 
 function escapeCell(value: string): string {

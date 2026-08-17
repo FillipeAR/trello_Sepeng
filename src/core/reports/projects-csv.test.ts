@@ -29,7 +29,7 @@ describe("buildProjectsCsv", () => {
     const csv = buildProjectsCsv([]);
     const [header] = csv.slice(1).split("\r\n");
     expect(header).toBe(
-      "Código;Obra;Cliente;Localização;Etapa atual;Status;Departamento;Progresso;Valor de contrato;Previsão de entrega;Atrasada;Gerente",
+      "CÓDIGO;OBRA;CLIENTE;LOCALIZAÇÃO;ETAPA ATUAL;STATUS;DEPARTAMENTO;PROGRESSO;VALOR DO CONTRATO (R$);PREVISÃO DE ENTREGA;ATRASADA;GERENTE",
     );
   });
 
