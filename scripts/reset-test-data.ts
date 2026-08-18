@@ -23,8 +23,7 @@ async function main() {
   ]);
 
   // Project cascade cobre: ProjectWorkflowInstance, StageInstance, StageFieldValue,
-  // ProjectTeamAssignment, ProjectUpdate, Measurement, ProjectDocument, PurchaseOrder,
-  // TeamPosition, Task.
+  // ProjectTeamAssignment, ProjectUpdate, TeamPosition, Task.
   const { count: projectCount } = await prisma.project.deleteMany({});
 
   console.log("\nApagado:");

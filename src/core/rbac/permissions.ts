@@ -37,14 +37,7 @@ export const PERMISSIONS = {
   TASK_MANAGE: "task:manage",
 
   // Financeiro
-  MEASUREMENT_MANAGE: "measurement:manage",
   PROJECT_READ_CONTRACT_VALUE: "project:read:contract_value",
-
-  // Compliance
-  DOCUMENT_MANAGE: "document:manage",
-
-  // Suprimentos
-  PROCUREMENT_MANAGE: "procurement:manage",
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -74,10 +67,7 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.REPORT_READ, category: "Transversal", description: "Acessar relatórios e indicadores" },
   { key: PERMISSIONS.COMMENT_CREATE, category: "Transversal", description: "Comentar em obras e etapas" },
   { key: PERMISSIONS.TASK_MANAGE, category: "Transversal", description: "Criar e concluir pendências" },
-  { key: PERMISSIONS.MEASUREMENT_MANAGE, category: "Financeiro", description: "Registrar e aprovar medições (orçamento vs. custo real)" },
   { key: PERMISSIONS.PROJECT_READ_CONTRACT_VALUE, category: "Financeiro", description: "Ver o valor de contrato da obra" },
-  { key: PERMISSIONS.DOCUMENT_MANAGE, category: "Compliance", description: "Gerenciar documentos com validade (ART/RRT, alvará, licença, seguro)" },
-  { key: PERMISSIONS.PROCUREMENT_MANAGE, category: "Suprimentos", description: "Gerenciar fornecedores e pedidos de compra" },
 ];
 
 /**
@@ -115,9 +105,6 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
       PERMISSIONS.STAFF_MANAGE,
-      PERMISSIONS.MEASUREMENT_MANAGE,
-      PERMISSIONS.DOCUMENT_MANAGE,
-      PERMISSIONS.PROCUREMENT_MANAGE,
       PERMISSIONS.PROJECT_READ_CONTRACT_VALUE,
     ],
   },
@@ -150,7 +137,6 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
       PERMISSIONS.STAFF_MANAGE,
-      PERMISSIONS.DOCUMENT_MANAGE,
     ],
   },
   {
@@ -180,7 +166,6 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.REPORT_READ,
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
-      PERMISSIONS.MEASUREMENT_MANAGE,
     ],
   },
   {
@@ -195,7 +180,6 @@ export const DEFAULT_ROLES: {
       PERMISSIONS.REPORT_READ,
       PERMISSIONS.COMMENT_CREATE,
       PERMISSIONS.TASK_MANAGE,
-      PERMISSIONS.PROCUREMENT_MANAGE,
     ],
   },
   {

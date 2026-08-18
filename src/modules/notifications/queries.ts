@@ -16,10 +16,6 @@ const EVENT_LABELS: Record<string, string> = {
   [DOMAIN_EVENTS.TASK_ASSIGNED]: "Lembrete atribuído a mim",
   [DOMAIN_EVENTS.MENTION_CREATED]: "Fui mencionado num comentário",
   [DOMAIN_EVENTS.SLA_BREACHED]: "SLA de etapa vencido",
-  [DOMAIN_EVENTS.MEASUREMENT_APPROVED]: "Minha medição foi aprovada",
-  [DOMAIN_EVENTS.MEASUREMENT_REJECTED]: "Minha medição foi reprovada",
-  [DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON]: "Documento perto de vencer",
-  [DOMAIN_EVENTS.DOCUMENT_EXPIRED]: "Documento vencido",
 };
 
 /**

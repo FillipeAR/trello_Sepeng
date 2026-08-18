@@ -14,7 +14,7 @@ export interface ProjectActivityItem {
 
 /**
  * Feed de atualizações automáticas da obra: narra todo evento de domínio
- * registrado pra ela (avanço de etapa, lembrete, SLA vencido, medição etc.),
+ * registrado pra ela (avanço de etapa, lembrete, SLA vencido etc.),
  * não só o que `resolveRecipients` decidiu notificar. Mesmo gate de acesso da
  * página da obra (`canActorReadProject`) — quem lê a obra vê o histórico
  * completo, cross-departamento, sem depender de quem foi "notificado" no

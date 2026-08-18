@@ -9,18 +9,12 @@ import { listProjectActivity } from "@/modules/projects/activity";
 import { listProjectTasks } from "@/modules/tasks/queries";
 import { listProfessionals } from "@/modules/staff/queries";
 import { listProjectComments } from "@/modules/comments/queries";
-import { getProjectMeasurements } from "@/modules/measurements/queries";
-import { getProjectDocuments } from "@/modules/documents/queries";
-import { getProjectPurchaseOrders, listSuppliers } from "@/modules/procurement/queries";
 import { StageTimeline } from "@/modules/projects/components/StageTimeline";
 import { ActivityFeed } from "@/modules/projects/components/ActivityFeed";
 import { DynamicStageForm } from "@/modules/projects/components/DynamicStageForm";
 import { ExternalCompletionPanel } from "@/modules/projects/components/ExternalCompletionPanel";
 import { TasksSection } from "@/modules/projects/components/TasksSection";
 import { CommentsSection } from "@/modules/projects/components/CommentsSection";
-import { MeasurementsSection } from "@/modules/projects/components/MeasurementsSection";
-import { DocumentsSection } from "@/modules/projects/components/DocumentsSection";
-import { ProcurementSection } from "@/modules/projects/components/ProcurementSection";
 import { ProgressUpdateForm } from "@/modules/projects/components/ProgressUpdateForm";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 
@@ -34,7 +28,7 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
   const { project, activeStages, timeline, progress, updates } = detail;
   const canUpdateProgress = hasPermission(actor, PERMISSIONS.PROJECT_UPDATE_PROGRESS);
 
-  const [users, tasks, professionals, comments, measurements, documents, purchaseOrders, suppliers, activity] =
+  const [users, tasks, professionals, comments, activity] =
     await Promise.all([
       prisma.membership.findMany({
         where: { organizationId: actor.organizationId, isActive: true },
@@ -44,10 +38,6 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
       listProjectTasks(actor, project.id),
       listProfessionals(actor),
       listProjectComments(actor, project.id),
-      getProjectMeasurements(actor, project.id),
-      getProjectDocuments(actor, project.id),
-      getProjectPurchaseOrders(actor, project.id),
-      listSuppliers(actor),
       listProjectActivity(actor, project.id),
     ]);
 
@@ -127,16 +117,6 @@ export default async function ObraPage({ params }: { params: Promise<{ id: strin
             tasks={tasks}
             users={users.map((m) => ({ id: m.user.id, name: m.user.name }))}
           />
-
-          {measurements ? (
-            <MeasurementsSection projectId={project.id} rows={measurements.rows} summary={measurements.summary} />
-          ) : null}
-
-          {documents ? <DocumentsSection projectId={project.id} documents={documents} /> : null}
-
-          {purchaseOrders ? (
-            <ProcurementSection projectId={project.id} orders={purchaseOrders} suppliers={suppliers} />
-          ) : null}
 
           {canUpdateProgress ? <ProgressUpdateForm projectId={project.id} /> : null}
 

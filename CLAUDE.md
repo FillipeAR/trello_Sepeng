@@ -122,8 +122,9 @@ MVP completo e verificado ponta a ponta: auth, RBAC, engine versionado, fluxo de
 cadastro de obra, formulários dinâmicos, esteira visual, fila do departamento, auditoria,
 notificações in-app (e-mail via Resend pra seleção de profissional), dashboards, visualização
 do fluxo, gestão de usuários e Estrutura da Equipe da Obra (canvas com drag-and-drop). Build,
-lint, `tsc` e 97 testes passando. Jornal Sepeng foi entregue e depois removido do repositório
-— ver seção correspondente mais abaixo.
+lint, `tsc` e 90 testes passando. Jornal Sepeng, Medições, Documentos com validade e
+Pedidos de compra foram entregues e depois removidos do repositório — ver seções
+correspondentes mais abaixo.
 
 Existe um fluxo v2 no banco (com etapa Jurídico) criado pelo script de demonstração, e duas
 obras de exemplo.
@@ -301,11 +302,11 @@ sempre apareceu cru pra qualquer papel que lesse a obra). Nova
 e `orcamento`. `canReadContractValue` (`src/core/rbac/can.ts`) é checada em
 `src/modules/projects/queries.ts` (`listProjects`/`getProjectDetail`): sem a permissão,
 `contractValue` volta `null` em vez do valor — UI mostra "—" na listagem e "Restrito" no
-detalhe. **De propósito não mexe** em `measurements/queries.ts` (usa o valor de contrato bruto
-pra calcular o resumo de medição — % do contrato executado — pra Financeiro/Diretoria; redigir
-ali quebraria esse indicador sem ter sido pedido) nem no contexto de condição do engine
-(`executeStageAction` usa `Number(project.contractValue)` pra avaliar condições de transição
-de fluxo — é cálculo interno do sistema, não exibição).
+detalhe. **De propósito não mexe** no contexto de condição do engine (`executeStageAction`
+usa `Number(project.contractValue)` pra avaliar condições de transição de fluxo — é cálculo
+interno do sistema, não exibição). A exceção que existia em `measurements/queries.ts` (usava
+o valor bruto pra calcular % do contrato medido) deixou de existir — a feature de Medições
+foi removida por completo (ver seção correspondente abaixo).
 
 ### E-mail ao selecionar um Profissional (STAFF) — entregue
 
@@ -827,6 +828,65 @@ que fecha `DONE` mesmo assim.
 `prisma/migrations/20260818120000_add_password_reset_tokens`) aplicado contra o Neon via
 `prisma migrate deploy`.
 
+### Medições, Documentos com validade e Pedidos de compra — removidas por completo
+
+As três vieram juntas na mesma migração original (`20260805110000_add_measurements_documents_procurement`)
+mas nunca chegaram a ser documentadas neste arquivo. A pedido, saíram do sistema por
+completo, uma a uma na mesma sessão — mesmo padrão de remoção já usado antes (ver "Jornal
+Sepeng" e "Organograma editável" acima): código, permissão e model do banco, nada ficou
+pela metade.
+
+**Medições** — seção "Medições — orçamento vs. custo real" da página da obra (resumo
+Previsto/Medido/Variação/% do contrato medido + lista + formulário de registro com
+aprovação por Financeiro/Diretoria). Saiu: `MeasurementsSection.tsx`,
+`src/modules/measurements/` (commands/queries), `src/core/measurements/`
+(`summarizeMeasurements` + teste), as 5 server actions de medição em `obras/actions.ts`, o
+model `Measurement`/enum `MeasurementStatus` (migration `20260818130000_drop_measurements`),
+a permissão `PERMISSIONS.MEASUREMENT_MANAGE` (tirada de
+`administrador`/`diretoria`/`financeiro`) e os eventos `measurement.approved`/
+`measurement.rejected` (`DOMAIN_EVENTS`, `describe()`, `EVENT_LABELS` e o roteamento de
+destinatário pessoal em `resolveRecipients`/`dispatcher.ts` — o campo
+`EventPayload.recipientId` só existia pra isso e saiu junto).
+
+**Achado ao remover Medições**: `measurements/queries.ts` era a única exceção documentada à
+redação de `contractValue` por `PROJECT_READ_CONTRACT_VALUE` (usava o valor bruto pra
+calcular "% do contrato medido" mesmo pra quem não tinha a permissão de ver o valor do
+contrato — ver seção "Valor de contrato restrito" acima). Com a remoção, essa exceção
+deixou de existir; `canReadContractValue` continua sem outro ponto de bypass no código.
+
+**Documentos com validade** — seção "Documentos" da página da obra (ART/RRT, alvará,
+licença, seguro, com `expiresAt` e alerta de vencimento). Saiu: `DocumentsSection.tsx`,
+`src/modules/documents/` (commands/queries/`expiry.ts` — o cron de vencimento),
+`src/core/documents/` (`validity.ts` + teste), as 3 server actions de documento em
+`obras/actions.ts`, a rota `/api/cron/document-check` e sua entrada em `vercel.ts`, o model
+`ProjectDocument` (migration `20260818140000_drop_documents_procurement`), a permissão
+`PERMISSIONS.DOCUMENT_MANAGE` (tirada de `diretoria`/`rh`) e os eventos
+`document.expiring_soon`/`document.expired` (mesma limpeza de `DOMAIN_EVENTS`, `describe()`,
+`EVENT_LABELS` — o roteamento por `PERMISSIONS.DOCUMENT_MANAGE` em
+`resolveRecipients`/`dispatcher.ts` saiu junto). O cron de SLA (`/api/cron/sla-check`)
+continua intocado e agora é o único job do projeto.
+
+**Pedidos de compra** — seção "Pedidos de compra" da página da obra + página
+`/admin/fornecedores` (cadastro de fornecedores) + entrada "Fornecedores" na navegação.
+Saiu: `ProcurementSection.tsx`, `src/modules/procurement/` (commands/queries),
+`src/core/procurement/` (`impact.ts` + teste — calculava atraso de pedido vs. etapa aberta),
+as 5 server actions de pedido em `obras/actions.ts`, o diretório inteiro
+`src/app/(app)/admin/fornecedores/`, os models `Supplier`/`PurchaseOrder` e o enum
+`PurchaseOrderStatus` (mesma migration `20260818140000_drop_documents_procurement`), e a
+permissão `PERMISSIONS.PROCUREMENT_MANAGE` (tirada de `diretoria`/`suprimentos`).
+
+Nenhum substituto ficou no lugar de nenhuma das três — se acompanhamento de orçamento vs.
+custo real, documentos com validade ou pedidos de compra forem necessários de novo, é
+escopo pra decidir quando aparecer, não antes.
+
+Rodar em produção: `prisma migrate deploy` (dropa `measurements`, `project_documents`,
+`suppliers`, `purchase_orders` e os dois enums) e `scripts/sync-permissions.ts` de novo
+(tira `measurement:manage`/`document:manage`/`procurement:manage` dos papéis — mesma
+ressalva de sempre, as linhas de `Permission` ficam órfãs no catálogo, inofensivas).
+Verificado localmente após as três remoções: `npm test` (90 testes — caiu de 106 porque
+foram junto os testes de `summary.test.ts`, `validity.test.ts` e `impact.test.ts`),
+`tsc --noEmit`, lint e `next build` limpos.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
@@ -903,6 +963,13 @@ ficaram represadas desde a quinta/sexta rodada — drop de `external_notificatio
 e drop de `news_posts`/`postsToJournal` (Jornal Sepeng). `scripts/sync-permissions.ts`
 também rodou de novo contra produção, tirando `recipients:manage` e `news:manage` dos
 papéis. **As três, já em produção.**
+
+Uma décima rodada removeu Medições, Documentos com validade e Pedidos de compra por
+completo (ver seção correspondente acima) — **só local por enquanto**: `prisma migrate
+deploy` (dropa `measurements`, `project_documents`, `suppliers`, `purchase_orders` e os
+dois enums, migrations `20260818130000_drop_measurements` e
+`20260818140000_drop_documents_procurement`) e `scripts/sync-permissions.ts` ainda
+precisam rodar contra o Neon pra produção acompanhar.
 
 Próximos candidatos sem ordem definida: controles no editor visual pra
 `completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais ricos

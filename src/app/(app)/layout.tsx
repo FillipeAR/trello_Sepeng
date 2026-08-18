@@ -10,7 +10,6 @@ import {
   LayoutGrid,
   Plus,
   Search,
-  Truck,
   Users,
   Workflow,
 } from "lucide-react";
@@ -58,12 +57,6 @@ export default async function AppLayout({
           label: "Engenheiros",
           icon: <HardHat strokeWidth={1.75} />,
           show: actor.permissions.includes(PERMISSIONS.STAFF_MANAGE),
-        },
-        {
-          href: "/admin/fornecedores",
-          label: "Fornecedores",
-          icon: <Truck strokeWidth={1.75} />,
-          show: actor.permissions.includes(PERMISSIONS.PROCUREMENT_MANAGE),
         },
         {
           href: "/admin/usuarios",

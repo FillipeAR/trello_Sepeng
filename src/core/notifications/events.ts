@@ -14,10 +14,6 @@ export const DOMAIN_EVENTS = {
   TASK_ASSIGNED: "task.assigned",
   MENTION_CREATED: "mention.created",
   SLA_BREACHED: "sla.breached",
-  MEASUREMENT_APPROVED: "measurement.approved",
-  MEASUREMENT_REJECTED: "measurement.rejected",
-  DOCUMENT_EXPIRING_SOON: "document.expiring_soon",
-  DOCUMENT_EXPIRED: "document.expired",
   /** Profissional (STAFF) selecionado num campo de etapa da obra. */
   STAFF_ASSIGNED: "staff.assigned",
   /** Cadastro próprio (`/cadastro`) — link de confirmação de e-mail. */

@@ -30,22 +30,6 @@ async function resolveRecipients(
   if (type === DOMAIN_EVENTS.MENTION_CREATED) {
     return payload.mentionedUserIds ?? [];
   }
-  if (type === DOMAIN_EVENTS.MEASUREMENT_APPROVED || type === DOMAIN_EVENTS.MEASUREMENT_REJECTED) {
-    return payload.recipientId ? [payload.recipientId] : [];
-  }
-  // Vencimento de documento não tem departamento dono nem equipe alocada
-  // como destinatário natural — avisa quem tem a permissão de cuidar disso.
-  if (type === DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON || type === DOMAIN_EVENTS.DOCUMENT_EXPIRED) {
-    const managers = await prisma.membership.findMany({
-      where: {
-        organizationId,
-        isActive: true,
-        role: { permissions: { some: { permission: { key: PERMISSIONS.DOCUMENT_MANAGE } } } },
-      },
-      select: { userId: true },
-    });
-    return managers.map((m) => m.userId);
-  }
 
   const recipients = new Set<string>();
 

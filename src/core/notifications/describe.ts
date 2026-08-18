@@ -4,7 +4,7 @@
  * in-app/WhatsApp) quanto pelo feed de atualizações por obra
  * (`src/modules/projects/activity.ts`).
  */
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { DOMAIN_EVENTS } from "@/core/notifications/events";
 
 export interface EventPayload {
@@ -25,13 +25,6 @@ export interface EventPayload {
   commentId?: string;
   excerpt?: string;
   mentionedUserIds?: string[];
-  /** Destinatário único de um evento pessoal (ex.: medição decidida — avisa quem registrou). */
-  recipientId?: string;
-  measurementReferenceDate?: string;
-  measuredValue?: string;
-  rejectionReason?: string;
-  documentType?: string;
-  documentExpiresAt?: string;
   /** staff.assigned — profissional (sem login) selecionado numa obra. */
   professionalId?: string;
   contextLabel?: string;
@@ -90,34 +83,6 @@ export function describe(type: string, p: EventPayload): { title: string; body: 
         title: `SLA vencido: ${p.projectName}`,
         body: `A etapa "${p.stageName}" está com o prazo estourado${
           p.dueAt ? ` desde ${formatDateTime(p.dueAt)}` : ""
-        }.`,
-      };
-    case DOMAIN_EVENTS.MEASUREMENT_APPROVED:
-      return {
-        title: `Medição aprovada: ${p.projectName}`,
-        body: `${p.actorName ?? "Alguém"} aprovou a medição de ${
-          p.measurementReferenceDate ? formatDateTime(p.measurementReferenceDate) : "referência"
-        } (${p.measuredValue ?? "—"}).`,
-      };
-    case DOMAIN_EVENTS.MEASUREMENT_REJECTED:
-      return {
-        title: `Medição reprovada: ${p.projectName}`,
-        body: `${p.actorName ?? "Alguém"} reprovou a medição de ${
-          p.measurementReferenceDate ? formatDateTime(p.measurementReferenceDate) : "referência"
-        }${p.rejectionReason ? ` — ${p.rejectionReason}` : ""}.`,
-      };
-    case DOMAIN_EVENTS.DOCUMENT_EXPIRING_SOON:
-      return {
-        title: `Documento vencendo: ${p.projectName}`,
-        body: `"${p.documentType}" vence em ${
-          p.documentExpiresAt ? formatDate(p.documentExpiresAt) : "breve"
-        } — providencie a renovação.`,
-      };
-    case DOMAIN_EVENTS.DOCUMENT_EXPIRED:
-      return {
-        title: `Documento vencido: ${p.projectName}`,
-        body: `"${p.documentType}" venceu em ${
-          p.documentExpiresAt ? formatDate(p.documentExpiresAt) : "data passada"
         }.`,
       };
     default:
