@@ -267,6 +267,31 @@ async function dispatchEmailVerificationEmail(payload: EventPayload): Promise<vo
 }
 
 /**
+ * `password_reset.requested` — "esqueci minha senha" (`/esqueci-senha`). A pessoa
+ * ainda não está autenticada nesse momento (sem `Notification` in-app possível),
+ * então o link só chega por e-mail — mesmo formato de `email_verification.requested`.
+ */
+async function dispatchPasswordResetEmail(payload: EventPayload): Promise<void> {
+  if (!payload.email || !payload.token) return;
+
+  const link = `${getAppUrl()}/redefinir-senha/${payload.token}`;
+  const subject = "Redefinir senha — ObraFlow";
+  const html = `
+    <p>Olá, ${payload.name ?? ""},</p>
+    <p>Recebemos um pedido para redefinir a senha da sua conta no ObraFlow. Clique no
+    link abaixo pra escolher uma senha nova (válido por 1 hora):</p>
+    <p><a href="${link}">${link}</a></p>
+    <p>Se você não pediu essa redefinição, ignore este e-mail — sua senha atual continua valendo.</p>
+  `;
+
+  try {
+    await sendEmail(payload.email, subject, html);
+  } catch (error) {
+    console.error(`Falha ao enviar e-mail de redefinição de senha (usuário ${payload.userId}):`, error);
+  }
+}
+
+/**
  * `signup.pending_approval` — e-mail já confirmado, falta um admin aprovar em
  * `/admin/usuarios`. Avisa in-app quem tem `user:manage` — não é sobre uma obra,
  * então não segue `resolveRecipients` (que é por departamento/equipe da obra).
@@ -313,6 +338,8 @@ export async function processOutbox(limit = 50): Promise<number> {
         await dispatchStaffAssignedEmail(payload);
       } else if (event.type === DOMAIN_EVENTS.EMAIL_VERIFICATION_REQUESTED) {
         await dispatchEmailVerificationEmail(payload);
+      } else if (event.type === DOMAIN_EVENTS.PASSWORD_RESET_REQUESTED) {
+        await dispatchPasswordResetEmail(payload);
       } else if (event.type === DOMAIN_EVENTS.SIGNUP_PENDING_APPROVAL) {
         await dispatchSignupPendingApproval(event.organizationId, payload);
       } else if (event.type === DOMAIN_EVENTS.USER_CREDENTIALS_ISSUED) {

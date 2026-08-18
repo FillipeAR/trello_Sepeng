@@ -21,6 +21,9 @@ import { CommandError } from "@/modules/projects/commands";
  */
 
 const VERIFICATION_TOKEN_TTL_HOURS = 24;
+const RESET_TOKEN_TTL_MINUTES = 60;
+const RESET_REQUEST_WINDOW_MINUTES = 15;
+const RESET_REQUEST_LIMIT = 3;
 
 const signUpSchema = z
   .object({
@@ -136,5 +139,121 @@ export async function verifyEmail(input: { token: string }) {
     });
 
     return { name: user.name, email: user.email };
+  });
+}
+
+const requestPasswordResetSchema = z.object({
+  email: z.string().email("E-mail inválido."),
+});
+
+/**
+ * "Esqueci minha senha" (`/esqueci-senha`). Nunca revela se o e-mail existe —
+ * sempre "sucesso" do ponto de vista da UI, mesmo quando não há conta (evita
+ * enumeração). Limita a `RESET_REQUEST_LIMIT` pedidos por `RESET_REQUEST_WINDOW_MINUTES`
+ * por usuário (contra `PasswordResetToken.createdAt`, sem infra nova) pra não virar
+ * vetor de spam na caixa de entrada de alguém; passado o limite, ainda "funciona"
+ * do lado do chamador, só não cria token nem manda e-mail de novo.
+ */
+export async function requestPasswordReset(input: { data: unknown }): Promise<void> {
+  const data = requestPasswordResetSchema.parse(input.data);
+  const email = data.email.trim().toLowerCase();
+
+  const user = await prisma.user.findUnique({ where: { email }, include: { memberships: true } });
+  if (!user) return;
+
+  const organizationId = user.memberships[0]?.organizationId;
+  if (!organizationId) return;
+
+  const since = new Date(Date.now() - RESET_REQUEST_WINDOW_MINUTES * 60_000);
+  const recentCount = await prisma.passwordResetToken.count({
+    where: { userId: user.id, createdAt: { gte: since } },
+  });
+  if (recentCount >= RESET_REQUEST_LIMIT) return;
+
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000);
+
+  await prisma.$transaction(async (tx) => {
+    // Só um link ativo por vez — pedir de novo invalida o anterior.
+    await tx.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    });
+
+    await tx.passwordResetToken.create({ data: { userId: user.id, token, expiresAt } });
+
+    await writeAudit(tx, {
+      organizationId,
+      actorId: null,
+      action: "user.password_reset_requested",
+      entityType: "User",
+      entityId: user.id,
+      summary: `Redefinição de senha solicitada para "${user.name}" (${email}).`,
+    });
+
+    await enqueueEvent(tx, {
+      organizationId,
+      type: DOMAIN_EVENTS.PASSWORD_RESET_REQUESTED,
+      payload: { userId: user.id, name: user.name, email: user.email, token },
+      idempotencyKey: `password-reset:${token}`,
+    });
+  });
+}
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, "Link inválido."),
+    password: z.string().min(8, "A senha precisa ter ao menos 8 caracteres."),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "As senhas não coincidem.",
+    path: ["confirmPassword"],
+  });
+
+export async function resetPassword(input: { data: unknown }): Promise<{ email: string }> {
+  const data = resetPasswordSchema.parse(input.data);
+
+  const record = await prisma.passwordResetToken.findUnique({
+    where: { token: data.token },
+    include: { user: { include: { memberships: true } } },
+  });
+
+  if (!record) {
+    throw new CommandError("Link inválido.", { errors: ["Este link de redefinição não existe."] });
+  }
+  if (record.usedAt) {
+    throw new CommandError("Link já usado.", {
+      errors: ["Este link de redefinição já foi usado ou expirou. Peça um novo."],
+    });
+  }
+  if (record.expiresAt < new Date()) {
+    throw new CommandError("Link expirado.", {
+      errors: ["Este link de redefinição expirou. Peça um novo."],
+    });
+  }
+
+  const organizationId = record.user.memberships[0]?.organizationId;
+  if (!organizationId) {
+    throw new CommandError("Conta inconsistente.", { errors: ["Esta conta não tem organização associada."] });
+  }
+
+  const passwordHash = await bcrypt.hash(data.password, 10);
+
+  return prisma.$transaction(async (tx) => {
+    await tx.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } });
+
+    const user = await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+
+    await writeAudit(tx, {
+      organizationId,
+      actorId: null,
+      action: "user.password_reset",
+      entityType: "User",
+      entityId: user.id,
+      summary: `"${user.name}" redefiniu a própria senha.`,
+    });
+
+    return { email: user.email };
   });
 }

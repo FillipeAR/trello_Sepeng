@@ -246,6 +246,7 @@ model User {
   createdDocuments        ProjectDocument[]
   createdPurchaseOrders   PurchaseOrder[]
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
 
   @@map("users")
 }
@@ -280,6 +281,25 @@ model EmailVerificationToken {
 
   @@index([userId])
   @@map("email_verification_tokens")
+}
+
+/// Token opaco de "esqueci minha senha" (`/esqueci-senha`). Uso único (`usedAt`),
+/// expira em 1h — mais curto que `EmailVerificationToken` porque concede acesso
+/// direto à conta, não só confirma um endereço. `requestPasswordReset` invalida
+/// (marca `usedAt`) qualquer token ainda válido do mesmo usuário antes de criar
+/// um novo — só um link ativo por vez.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("password_reset_tokens")
 }
 
 model Membership {

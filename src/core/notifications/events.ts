@@ -26,6 +26,8 @@ export const DOMAIN_EVENTS = {
   SIGNUP_PENDING_APPROVAL: "signup.pending_approval",
   /** Conta criada por um admin (`/admin/usuarios`) ou senha redefinida por um admin — avisa a credencial por e-mail. */
   USER_CREDENTIALS_ISSUED: "user.credentials_issued",
+  /** "Esqueci minha senha" (`/esqueci-senha`) — link de redefinição por e-mail. */
+  PASSWORD_RESET_REQUESTED: "password_reset.requested",
 } as const;
 
 export type DomainEventType = (typeof DOMAIN_EVENTS)[keyof typeof DOMAIN_EVENTS];

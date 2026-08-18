@@ -794,6 +794,39 @@ completionMode) → v20 (remoção do Jurídico) → v21 (docs ADM, ainda quebra
 reparado) → v23 (clonagem extra só pra confirmar que o fix de código segura). Produção: v15
 (docs ADM, quebrado) → v16 (reparado, com o fix de código já no ar).
 
+### "Esqueci minha senha" — entregue
+
+Fecha a última lacuna do levantamento de segurança (ver seção acima). Mesmo esqueleto do
+cadastro próprio: token opaco de uso único, modelo dedicado (`PasswordResetToken`, TTL de
+**1h** — mais curto que `EmailVerificationToken`, 24h, porque concede acesso direto à conta,
+não só confirma um endereço) e commands em `src/modules/auth/commands.ts`
+(`requestPasswordReset`/`resetPassword`).
+
+`/esqueci-senha` (link novo na tela de login, ao lado do campo Senha) pede só o e-mail e
+**nunca revela se a conta existe** — sempre a mesma mensagem de sucesso, exista ou não o
+e-mail, pra não virar vetor de enumeração de contas. Limite de 3 pedidos por 15 min por
+usuário (contra `PasswordResetToken.createdAt`, sem infra nova — mesmo espírito do rate
+limiting de login em `LoginAttempt`) evita virar spam na caixa de entrada de alguém; passado
+o limite, a resposta continua "sucesso" pro chamador, só não cria token nem manda e-mail de
+novo. Pedir de novo invalida (marca `usedAt`) qualquer token anterior ainda válido do mesmo
+usuário — só um link ativo por vez. `/redefinir-senha/[token]` troca a senha
+(`bcrypt`, custo 10, mesmo padrão de sempre) e audita com `actorId: null` (mesmo padrão do
+cadastro próprio — quem troca a própria senha esquecida ainda não está autenticado no
+momento do pedido).
+
+Novo evento `password_reset.requested`, dispatcher dedicado
+(`dispatchPasswordResetEmail`) — mesmo formato de `email_verification.requested`: só
+e-mail, sem `Notification` in-app (a pessoa não está logada). Verificado ponta a ponta
+contra o banco local: token criado, token errado rejeitado, redefinição bem-sucedida,
+reuso do mesmo token rejeitado, rate limit de 3 pedidos confirmado, e-mail inexistente não
+lança nem revela nada, e o envio real via Resend (que falha aqui por só entregar em
+endereço de teste — mesma limitação de `EMAIL_FROM` já documentada) não derruba o evento,
+que fecha `DONE` mesmo assim.
+
+**Só local por enquanto**: schema novo (`password_reset_tokens`,
+`prisma/migrations/20260818120000_add_password_reset_tokens`) precisa de `prisma migrate
+deploy` contra o Neon antes de existir em produção.
+
 ### Próximos passos (V1)
 
 Todos os itens do roadmap inicial (upload de anexos, comentários com @menção,
@@ -868,8 +901,11 @@ pra `main` (commit `33c68b8`) disparou o deploy de produção da ativação da A
 documentos da ADM (`scripts/add-adm-documents.ts`) rodaram contra local e Neon na mesma
 sessão, v21 local / v15 produção.
 
-Próximos candidatos sem ordem definida: reset de senha ("esqueci minha senha" — a única
-lacuna do levantamento de segurança que ainda falta), controles no editor visual pra
+Uma nona rodada entregou "esqueci minha senha" (ver seção acima), fechando a última
+lacuna do levantamento de segurança — **só local por enquanto**, falta rodar `prisma
+migrate deploy` contra o Neon.
+
+Próximos candidatos sem ordem definida: controles no editor visual pra
 `completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais ricos
 nas outras listagens (`/lembretes`, auditoria), export CSV/PDF da equipe da obra, quais
 documentos exigir em RH (ainda ⚠️ em aberto), emissão de relatórios, as funcionalidades por
