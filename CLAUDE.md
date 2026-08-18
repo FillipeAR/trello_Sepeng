@@ -879,13 +879,13 @@ Nenhum substituto ficou no lugar de nenhuma das três — se acompanhamento de o
 custo real, documentos com validade ou pedidos de compra forem necessários de novo, é
 escopo pra decidir quando aparecer, não antes.
 
-Rodar em produção: `prisma migrate deploy` (dropa `measurements`, `project_documents`,
+**Em produção**: `prisma migrate deploy` (dropou `measurements`, `project_documents`,
 `suppliers`, `purchase_orders` e os dois enums) e `scripts/sync-permissions.ts` de novo
-(tira `measurement:manage`/`document:manage`/`procurement:manage` dos papéis — mesma
-ressalva de sempre, as linhas de `Permission` ficam órfãs no catálogo, inofensivas).
-Verificado localmente após as três remoções: `npm test` (90 testes — caiu de 106 porque
-foram junto os testes de `summary.test.ts`, `validity.test.ts` e `impact.test.ts`),
-`tsc --noEmit`, lint e `next build` limpos.
+(tirou `measurement:manage`/`document:manage`/`procurement:manage` dos papéis — mesma
+ressalva de sempre, as linhas de `Permission` ficam órfãs no catálogo, inofensivas), ambos
+rodados contra o Neon na mesma sessão. Verificado localmente após as três remoções:
+`npm test` (90 testes — caiu de 106 porque foram junto os testes de `summary.test.ts`,
+`validity.test.ts` e `impact.test.ts`), `tsc --noEmit`, lint e `next build` limpos.
 
 ### Próximos passos (V1)
 
@@ -965,11 +965,10 @@ também rodou de novo contra produção, tirando `recipients:manage` e `news:man
 papéis. **As três, já em produção.**
 
 Uma décima rodada removeu Medições, Documentos com validade e Pedidos de compra por
-completo (ver seção correspondente acima) — **só local por enquanto**: `prisma migrate
-deploy` (dropa `measurements`, `project_documents`, `suppliers`, `purchase_orders` e os
-dois enums, migrations `20260818130000_drop_measurements` e
-`20260818140000_drop_documents_procurement`) e `scripts/sync-permissions.ts` ainda
-precisam rodar contra o Neon pra produção acompanhar.
+completo (ver seção correspondente acima) — **já em produção**: `prisma migrate deploy`
+(migrations `20260818130000_drop_measurements` e `20260818140000_drop_documents_procurement`,
+dropando `measurements`, `project_documents`, `suppliers`, `purchase_orders` e os dois
+enums) e `scripts/sync-permissions.ts` rodados contra o Neon na mesma sessão.
 
 Próximos candidatos sem ordem definida: controles no editor visual pra
 `completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais ricos
