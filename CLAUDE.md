@@ -370,10 +370,10 @@ substituto ficou no lugar do "marco de fluxo" — se uma automação parecida fo
 novo (ex.: pro sistema novo consumir via webhook), é escopo pra decidir quando aparecer, não
 antes.
 
-Rodar em produção: `prisma migrate deploy` (dropa `news_posts` e a coluna
-`postsToJournal`) e `scripts/sync-permissions.ts` de novo (tira `news:manage` de
-`administrador`/`diretoria` — mesma ressalva de sempre: a linha de `Permission` em si fica
-órfã no catálogo, inofensiva).
+**Em produção** desde a rodada que também entregou "esqueci minha senha" (ver abaixo):
+`prisma migrate deploy` dropou `news_posts` e a coluna `postsToJournal`, e
+`scripts/sync-permissions.ts` tirou `news:manage` de `administrador`/`diretoria` — mesma
+ressalva de sempre: a linha de `Permission` em si fica órfã no catálogo, inofensiva.
 
 ### Estrutura da Equipe da Obra — entregue
 
@@ -823,9 +823,9 @@ lança nem revela nada, e o envio real via Resend (que falha aqui por só entreg
 endereço de teste — mesma limitação de `EMAIL_FROM` já documentada) não derruba o evento,
 que fecha `DONE` mesmo assim.
 
-**Só local por enquanto**: schema novo (`password_reset_tokens`,
-`prisma/migrations/20260818120000_add_password_reset_tokens`) precisa de `prisma migrate
-deploy` contra o Neon antes de existir em produção.
+**Em produção**: schema novo (`password_reset_tokens`,
+`prisma/migrations/20260818120000_add_password_reset_tokens`) aplicado contra o Neon via
+`prisma migrate deploy`.
 
 ### Próximos passos (V1)
 
@@ -855,20 +855,14 @@ Uma quinta rodada entregou o feed de atualizações, o aviso de Obra Ganha e o J
 `scripts/sync-permissions.ts` e `scripts/enable-journal-milestones.ts`
 (Orçamento/Obra Finalizada marcados) rodados contra o Neon, fluxo publicado como v11. No
 mesmo processo, achou-se e corrigiu-se em produção a regressão da Diretoria descrita acima
-(`scripts/fix-diretoria-completion-mode.ts`). **Pendência nova, ainda não deployada**: logo
-em seguida o desenho do aviso de Obra Ganha mudou (lista curada → opt-in por usuário, ver
-seção acima) — o código local já reflete isso, mas produção ainda está com a versão antiga:
-tabela `external_notification_recipients` (vazia, sem risco de perda de dado) e a
-concessão de `recipients:manage` aos papéis seguem em produção até rodar `prisma migrate
-deploy` de novo (dropa a tabela) e `scripts/sync-permissions.ts` de novo (tira a permissão
-de todos os papéis — `sync-permissions.ts` nunca apaga a linha de `Permission` em si, só
-upserta o catálogo atual e recria `RolePermission`; a chave `recipients:manage` fica
-órfã no catálogo até uma limpeza manual, inofensiva porque nada mais no código a checa).
+(`scripts/fix-diretoria-completion-mode.ts`). Logo em seguida o desenho do aviso de Obra
+Ganha mudou (lista curada → opt-in por usuário, ver seção acima) — pendência resolvida na
+nona rodada (abaixo): `external_notification_recipients` foi dropada e `recipients:manage`
+tirada de todos os papéis.
 
 Uma sexta rodada removeu o Jornal Sepeng por completo (ver seção correspondente acima) —
-**só local por enquanto**: `prisma migrate deploy` e `scripts/sync-permissions.ts` ainda
-precisam rodar contra o Neon pra produção acompanhar (dropar `news_posts`/`postsToJournal`
-e tirar `news:manage` dos papéis).
+também resolvida na nona rodada: `news_posts`/`postsToJournal` dropados e `news:manage`
+tirada dos papéis.
 
 Uma sétima rodada, a partir do checklist novo da Sepeng, adicionou as etapas paralelas
 Qualidade/Meio Ambiente/ADM com trava de liberação, renomeou Execução pra "Engenharia" (o
@@ -902,8 +896,13 @@ documentos da ADM (`scripts/add-adm-documents.ts`) rodaram contra local e Neon n
 sessão, v21 local / v15 produção.
 
 Uma nona rodada entregou "esqueci minha senha" (ver seção acima), fechando a última
-lacuna do levantamento de segurança — **só local por enquanto**, falta rodar `prisma
-migrate deploy` contra o Neon.
+lacuna do levantamento de segurança. Ao rodar `prisma migrate deploy` contra o Neon pra
+essa feature, três migrations pendentes foram aplicadas de uma vez (o comando aplica tudo
+que está pendente, não só a mais recente): a de `password_reset_tokens`, e as duas que
+ficaram represadas desde a quinta/sexta rodada — drop de `external_notification_recipients`
+e drop de `news_posts`/`postsToJournal` (Jornal Sepeng). `scripts/sync-permissions.ts`
+também rodou de novo contra produção, tirando `recipients:manage` e `news:manage` dos
+papéis. **As três, já em produção.**
 
 Próximos candidatos sem ordem definida: controles no editor visual pra
 `completionMode`/`externalCompletionPath` (hoje só por script), paginação/filtros mais ricos
